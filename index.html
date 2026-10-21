@@ -1,0 +1,1504 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<title>DOMI · Talleres Iztacalco</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Talleres">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#33ccff">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* Estilo tipo Waze: mapa a pantalla completa, barra de búsqueda flotante arriba,
+   panel deslizable abajo y un dock redondo. --adbar deja espacio para el anuncio
+   del hosting gratuito (tiiny.host); pon 0px si tu plan no muestra anuncios. */
+:root{
+  --waze:#33ccff; --waze-d:#0aa3e0; --ink:#1b2a3a; --muted:#6b7a8c; --bg:#f3f7fb; --card:#ffffff; --line:#e3eaf2; --soft:#eef4fa;
+  --ok:#1fc46b; --star:#ffc531; --red:#ff4d6d; --purple:#8a5cf6;
+  --font:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --adbar:96px; --dock:66px;
+  --shadow:0 10px 30px rgba(27,42,58,.18); --shadow-s:0 4px 14px rgba(27,42,58,.14);
+  --spring:cubic-bezier(.2,1.25,.35,1);
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:700 15px/1.4 var(--font);overscroll-behavior:none}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+a{color:inherit;text-decoration:none}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid var(--waze-d);outline-offset:2px;border-radius:10px}
+.press{transition:transform .18s var(--spring)}
+.press:active{transform:scale(.92)}
+
+#map{position:fixed;inset:0;background:#e9eef3;z-index:1}
+.leaflet-container{font-family:var(--font)}
+.tiles{filter:saturate(1.25) brightness(1.04) contrast(.96)}
+.leaflet-bottom{bottom:calc(var(--sb) + var(--adbar) + var(--dock) + 18px)}
+.leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.7)!important;border-radius:6px;margin-left:8px!important}
+
+/* ---------- barra superior ---------- */
+.top{position:fixed;z-index:40;top:calc(var(--st) + 10px);left:12px;right:12px;transition:transform .35s var(--spring),opacity .25s}
+.sbar{display:flex;align-items:center;gap:8px;height:56px;padding:0 8px;background:var(--card);border-radius:28px;box-shadow:var(--shadow);animation:dropIn .6s var(--spring) both}
+.avatar{flex:none;width:42px;height:42px;border-radius:50%;padding:3px;background:conic-gradient(var(--ok) calc(var(--p,0)*1%),#e3eaf2 0);transition:background .4s}
+.avatar span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:#fff;font-size:21px;line-height:1}
+.sbar input{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;font:800 16px var(--font);color:var(--ink)}
+.sbar input::placeholder{color:#9aa8b8;font-weight:700}
+.sbar input::-webkit-search-cancel-button{display:none}
+.sclear{width:34px;height:34px;border-radius:50%;color:var(--muted);font-size:16px;display:grid;place-items:center}
+.sgo{flex:none;width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#5ad8ff,var(--waze-d));display:grid;place-items:center;box-shadow:0 4px 12px rgba(10,163,224,.45)}
+.sgo svg{width:21px;height:21px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round}
+.quick{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 6px;scrollbar-width:none}
+.quick::-webkit-scrollbar{display:none}
+.qc{flex:none;display:flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:19px;background:var(--card);box-shadow:var(--shadow-s);font:800 13px var(--font);white-space:nowrap;animation:popIn .5s var(--spring) both;animation-delay:calc(var(--i,0)*60ms + .15s)}
+.qc.hot{background:var(--waze);color:#fff}
+.qc[aria-pressed="true"]{background:var(--ink);color:#fff}
+.suggest{margin-top:8px;background:var(--card);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;animation:popIn .3s var(--spring) both}
+.sg{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;text-align:left;border-top:1px solid var(--line)}
+.sg:first-child{border-top:0}
+.sg .e{flex:none;width:36px;height:36px;border-radius:12px;background:var(--soft);display:grid;place-items:center;font-size:18px}
+.sg b{display:block;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg small{display:block;color:var(--muted);font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg>div{min-width:0}
+
+.here{position:fixed;z-index:35;left:50%;top:calc(var(--st) + 128px);transform:translateX(-50%);height:42px;padding:0 18px;border-radius:21px;background:var(--card);color:var(--waze-d);font:900 14px var(--font);box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;animation:popDown .45s var(--spring) both;white-space:nowrap}
+
+/* ---------- botones flotantes ---------- */
+.fabs{position:fixed;z-index:30;right:12px;bottom:calc(var(--sb) + var(--adbar) + var(--dock) + 30px);display:grid;gap:12px;transition:opacity .25s,transform .35s var(--spring)}
+.fab{width:52px;height:52px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:grid;place-items:center;font-size:22px}
+.fab svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.fab.on svg{stroke:var(--waze-d)}
+body.sheet-up .fabs,body.navon .fabs{opacity:0;transform:translateX(80px);pointer-events:none}
+
+/* ---------- dock ---------- */
+.dock{position:fixed;z-index:50;left:12px;right:12px;bottom:calc(var(--sb) + var(--adbar) + 8px);height:var(--dock);background:var(--card);border-radius:24px;box-shadow:var(--shadow);display:grid;grid-template-columns:1fr 1fr 84px 1fr 1fr;align-items:center;animation:riseIn .6s var(--spring) both;transition:transform .35s var(--spring)}
+.dk{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--muted);font:800 11px var(--font)}
+.dk .i{font-size:22px;line-height:1;transition:transform .3s var(--spring)}
+.dk[aria-current="true"]{color:var(--waze-d)}
+.dk[aria-current="true"] .i{transform:translateY(-2px) scale(1.15)}
+.dk .badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--red);color:#fff;font:900 11px/20px var(--font);text-align:center}
+.dk .badge.bump{animation:bump .5s var(--spring)}
+.near{justify-self:center;width:72px;height:72px;margin-top:-30px;border-radius:50%;background:linear-gradient(140deg,#6fe0ff,var(--waze-d));color:#fff;display:grid;place-items:center;box-shadow:0 8px 22px rgba(10,163,224,.55),0 0 0 6px #fff;position:relative}
+.near span{font-size:30px;line-height:1}
+.near::before{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid var(--waze);animation:ping 2.4s ease-out infinite}
+.near small{position:absolute;bottom:-21px;font:900 10px var(--font);color:var(--waze-d);white-space:nowrap}
+body.navon .dock{transform:translateY(160%)}
+body.navon .top{transform:translateY(-160%);opacity:0}
+
+/* ---------- panel deslizable ---------- */
+.sheet{position:fixed;z-index:45;left:8px;right:8px;bottom:calc(var(--sb) + var(--adbar) + var(--dock) + 14px);background:var(--card);border-radius:26px;box-shadow:0 -6px 30px rgba(27,42,58,.18);display:flex;flex-direction:column;max-height:calc(100vh - var(--st) - var(--sb) - var(--adbar) - var(--dock) - 100px);max-height:calc(100dvh - var(--st) - var(--sb) - var(--adbar) - var(--dock) - 100px);transition:transform .45s var(--spring),opacity .25s;touch-action:pan-y}
+.sheet[data-s="closed"]{transform:translateY(calc(100% + 200px));opacity:0;pointer-events:none}
+.sheet.drag{transition:none}
+.grab{flex:none;height:22px;display:grid;place-items:center;cursor:grab;touch-action:none}
+.grab i{width:44px;height:5px;border-radius:3px;background:#d3dce6}
+.sh-head{flex:none;display:flex;align-items:center;gap:10px;padding:0 14px 10px;touch-action:none}
+.sh-head .tt{flex:1;min-width:0}
+.sh-head h3{margin:0;font:900 19px/1.15 var(--font);overflow-wrap:anywhere}
+.sh-head p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.ib{flex:none;width:40px;height:40px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-size:17px;font-weight:900;color:var(--ink)}
+.sh-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 14px 16px;transition:max-height .4s var(--spring)}
+.sheet[data-s="min"] .sh-body{display:none}
+.sheet[data-s="half"] .sh-body{max-height:40vh;max-height:40dvh}
+.sheet .anim>*{animation:slideUp .45s var(--spring) both;animation-delay:calc(var(--i,0)*45ms)}
+
+/* tarjetas */
+.cards{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.rc,.lc{display:flex;align-items:center;gap:12px;padding:10px;border-radius:20px;background:var(--card);border:2px solid var(--line);text-align:left;width:100%;transition:border-color .2s,transform .2s var(--spring)}
+.rc:active,.lc:active{transform:scale(.98)}
+.av{flex:none;width:48px;height:48px;border-radius:16px;background:color-mix(in srgb,var(--c) 18%,#fff);display:grid;place-items:center;font-size:24px;position:relative}
+.av.big{width:64px;height:64px;border-radius:22px;font-size:32px}
+.rc-i,.lc-i{flex:1;min-width:0;text-align:left}
+.nm{font:900 15px/1.2 var(--font);overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-top:4px;font-size:12px;color:var(--muted)}
+.tag{font:900 10px var(--font);letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:8px;background:color-mix(in srgb,var(--c) 16%,#fff);color:color-mix(in srgb,var(--c) 70%,#000)}
+.dist{color:var(--ink);font-weight:900;font-variant-numeric:tabular-nums}
+.addr{font-size:12px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.new{font:900 10px var(--font);padding:3px 7px;border-radius:8px;background:#efe7ff;color:var(--purple)}
+.when{color:var(--ok);font-weight:900}
+.add{flex:none;height:40px;padding:0 14px;border-radius:20px;background:var(--waze);color:#fff;font:900 13px var(--font);box-shadow:0 4px 10px rgba(51,204,255,.4);transition:background .25s,transform .25s var(--spring)}
+.add.on{background:#e7f9ef;color:var(--ok);box-shadow:none}
+.lc.done{border-color:color-mix(in srgb,var(--ok) 40%,var(--line));background:#f6fdf9}
+.lc.done .nm{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--ok);text-decoration-thickness:2px}
+.chk{flex:none;width:44px;height:44px;display:grid;place-items:center}
+.box{width:32px;height:32px;border-radius:11px;border:3px solid #c5d1de;display:grid;place-items:center;transition:all .3s var(--spring)}
+.box svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;transform:scale(0);transition:transform .35s var(--spring)}
+.chk[aria-pressed="true"] .box{background:var(--ok);border-color:var(--ok);transform:rotate(-8deg)}
+.chk[aria-pressed="true"] .box svg{transform:scale(1)}
+.star{flex:none;width:40px;height:40px;display:grid;place-items:center;font-size:22px;color:#cfd8e3;transition:transform .35s var(--spring)}
+.star.on{color:var(--star);transform:scale(1.12)}
+.empty{padding:26px 12px;text-align:center;color:var(--muted)}
+.empty .big{font-size:44px;display:block;margin-bottom:6px;animation:wobble 2s ease-in-out infinite}
+.skel{height:72px;border-radius:20px;background:linear-gradient(90deg,var(--soft) 25%,#fff 50%,var(--soft) 75%);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+
+/* chips/segmentos */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:34px;padding:0 13px;border-radius:17px;background:var(--soft);font:800 12px var(--font);color:var(--ink);transition:background .2s,color .2s}
+.chip[aria-pressed="true"]{background:var(--ink);color:#fff}
+.seg{position:relative;display:grid;grid-template-columns:repeat(4,1fr);background:var(--soft);border-radius:16px;padding:4px;margin-bottom:10px}
+.seg button{position:relative;z-index:1;height:36px;border-radius:12px;font:900 12px var(--font);color:var(--muted);transition:color .25s}
+.seg button[aria-pressed="true"]{color:var(--ink)}
+.seg .thumb{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/4);border-radius:12px;background:#fff;box-shadow:var(--shadow-s);transition:transform .4s var(--spring)}
+.find{width:100%;height:44px;border-radius:14px;border:2px solid var(--line);background:#fff;padding:0 14px;font:800 14px var(--font);outline:0;margin-bottom:10px}
+.find:focus{border-color:var(--waze)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:0 14px;border-radius:16px;background:var(--soft);font:900 13px var(--font);color:var(--ink);text-align:center}
+.btn.pri{background:var(--waze);color:#fff;box-shadow:0 6px 14px rgba(51,204,255,.4)}
+.btn.dark{background:var(--ink);color:#fff}
+.btn.warn{background:#ffe8ec;color:#d61f45}
+.count{font-size:12px;color:var(--muted);margin:0 2px 8px}
+
+/* detalle */
+.dt-hero{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.bdg{font:900 11px var(--font);padding:4px 9px;border-radius:10px;background:var(--soft)}
+.bdg.ok{background:#e3f8ec;color:#11914c}.bdg.fav{background:#fff4d6;color:#a77900}.bdg.list{background:#dff6ff;color:#0782b3}
+.go{width:100%;height:60px;border-radius:20px;background:linear-gradient(135deg,#5ad8ff,var(--waze-d));color:#fff;font:900 19px var(--font);display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 10px 22px rgba(10,163,224,.45);position:relative;overflow:hidden}
+.go small{font-weight:800;font-size:13px;opacity:.9}
+.go::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:shine 2.8s ease-in-out infinite}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+.act{display:flex;flex-direction:column;align-items:center;gap:6px;font:800 11px var(--font);color:var(--ink);text-align:center}
+.act .c{width:54px;height:54px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-size:23px;transition:transform .35s var(--spring),background .25s}
+.act.on .c{background:var(--waze);color:#fff}
+.act.ok.on .c{background:var(--ok)}
+.act.fv.on .c{background:var(--star)}
+.act:active .c{transform:scale(.85)}
+.inf{display:grid;gap:2px;background:var(--soft);border-radius:18px;padding:6px 14px;margin-bottom:12px}
+.inf div{display:flex;gap:10px;padding:8px 0;font-size:14px;overflow-wrap:anywhere}
+.inf div+div{border-top:1px solid var(--line)}
+.inf a{color:var(--waze-d)}
+.note{width:100%;min-height:74px;border-radius:16px;border:2px solid var(--line);padding:10px 12px;font:700 14px var(--font);resize:vertical;outline:0}
+.note:focus{border-color:var(--waze)}
+.lbl{font:900 12px var(--font);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:4px 2px 6px}
+
+/* progreso */
+.prog{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,#e9fbff,#f3ecff);border-radius:22px;padding:16px;margin-bottom:12px}
+.ring{flex:none;width:112px;height:112px;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:12}
+.ring .bg{stroke:#fff}
+.ring .fg{stroke:url(#rg);stroke-linecap:round;transition:stroke-dashoffset 1s var(--spring)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font:900 26px/1 var(--font)}
+.ring b small{display:block;font-size:11px;color:var(--muted)}
+.mood{font-size:38px;animation:wobble 2.4s ease-in-out infinite;display:inline-block}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.stat{background:var(--soft);border-radius:18px;padding:12px}
+.stat b{display:block;font:900 24px var(--font)}
+.stat span{font-size:12px;color:var(--muted)}
+.bars{display:grid;gap:10px;margin-bottom:14px}
+.bars .h{display:flex;justify-content:space-between;font-size:13px}
+.bars i{display:block;height:10px;border-radius:5px;background:var(--soft);overflow:hidden;margin-top:4px}
+.bars i::after{content:"";display:block;height:100%;width:var(--w,0%);background:var(--c);border-radius:5px;transition:width 1s var(--spring)}
+
+/* ---------- pines ---------- */
+.pin{position:relative;width:40px;height:40px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,.3);display:grid;place-items:center;font-size:19px;line-height:1;transition:transform .3s var(--spring)}
+.pin::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-6px;border:6px solid transparent;border-top:7px solid #fff}
+.pin.found{background:#fff;border-color:var(--c);width:36px;height:36px;font-size:17px}
+.pin.found::after{border-top-color:var(--c)}
+.pin.ok{background:var(--ok)}
+.pin i{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--ok);color:#fff;font:900 11px/18px var(--font);font-style:normal;text-align:center;border:2px solid #fff}
+.pin i.f{left:-6px;right:auto;background:var(--star)}
+.pin.sel{transform:scale(1.3) translateY(-6px);z-index:9}
+.pin.sel::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:3px solid var(--c);animation:ping 1.6s ease-out infinite}
+.pin.drop{animation:pinDrop .7s var(--spring) both;animation-delay:var(--d,0ms)}
+.basepin{width:42px;height:42px;border-radius:50%;background:var(--ink);border:3px solid #fff;display:grid;place-items:center;font-size:20px;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.me{width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 0 0 8px rgba(51,204,255,.25),0 3px 8px rgba(0,0,0,.3);display:grid;place-items:center;animation:breathe 2.4s ease-in-out infinite}
+.me i{width:16px;height:16px;border-radius:50%;background:var(--waze-d)}
+.me.dir i{width:0;height:0;border-radius:0;background:none;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:16px solid var(--waze-d);transform:rotate(var(--h,0deg))}
+.ctr{width:120px;height:120px;border-radius:50%;border:3px solid rgba(51,204,255,.6);background:rgba(51,204,255,.1);animation:ripple 2s ease-out infinite;pointer-events:none}
+
+/* radar de búsqueda */
+.radar{position:fixed;z-index:38;left:50%;top:42%;width:190px;height:190px;margin:-95px 0 0 -95px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 0deg,rgba(51,204,255,.55),rgba(51,204,255,0) 30%);border:3px solid rgba(51,204,255,.45);animation:spin 1.3s linear infinite}
+.radar-l{position:fixed;z-index:39;left:50%;top:calc(42% + 110px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:18px;font:900 13px var(--font);white-space:nowrap;animation:popIn .3s var(--spring) both}
+
+/* ---------- navegación ---------- */
+.navtop{position:fixed;z-index:60;top:calc(var(--st) + 10px);left:10px;right:10px;background:linear-gradient(135deg,#22364b,#1b2a3a);color:#fff;border-radius:24px;padding:14px;display:flex;gap:14px;align-items:center;box-shadow:var(--shadow);animation:dropIn .5s var(--spring) both}
+.nav-ico{flex:none;width:64px;height:64px;border-radius:18px;background:var(--waze);display:grid;place-items:center;font:900 38px/1 var(--font);color:#fff}
+.nav-d{font:900 28px/1 var(--font);font-variant-numeric:tabular-nums}
+.nav-t{font:800 15px/1.25 var(--font);margin-top:4px;opacity:.92;overflow-wrap:anywhere}
+.navbot{position:fixed;z-index:60;left:10px;right:10px;bottom:calc(var(--sb) + var(--adbar) + 8px);background:#fff;border-radius:24px;padding:12px 12px 12px 18px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);animation:riseIn .5s var(--spring) both}
+.navbot .eta{flex:1;min-width:0}
+.navbot .eta b{display:block;font:900 22px/1.1 var(--font);font-variant-numeric:tabular-nums}
+.navbot .eta span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.navbot .btn{min-height:48px}
+.speed{position:fixed;z-index:60;left:14px;bottom:calc(var(--sb) + var(--adbar) + 96px);width:66px;height:66px;border-radius:50%;background:#fff;border:4px solid var(--ink);display:grid;place-items:center;text-align:center;box-shadow:var(--shadow);font:900 22px/1 var(--font)}
+.speed small{display:block;font-size:9px;color:var(--muted)}
+.recenter{position:fixed;z-index:60;right:14px;bottom:calc(var(--sb) + var(--adbar) + 96px);height:48px;padding:0 16px;border-radius:24px;background:#fff;box-shadow:var(--shadow);font:900 14px var(--font);color:var(--waze-d)}
+
+/* modal / toast / confeti */
+.modal{position:fixed;z-index:90;inset:0;background:rgba(20,32,45,.45);display:grid;place-items:center;padding:24px;animation:fade .25s both}
+.mbox{width:100%;max-width:360px;background:#fff;border-radius:28px;padding:24px;text-align:center;animation:popIn .45s var(--spring) both}
+.mbox .e{font-size:58px;display:block;animation:wobble 1.6s ease-in-out infinite}
+.mbox h3{margin:8px 0 4px;font:900 22px var(--font)}
+.mbox p{margin:0 0 16px;color:var(--muted)}
+.mbox .btn{width:100%;margin-top:8px}
+.toast{position:fixed;z-index:95;left:50%;top:calc(var(--st) + 76px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:18px;font:800 14px var(--font);max-width:calc(100% - 32px);text-align:center;box-shadow:var(--shadow);animation:popDown .4s var(--spring) both}
+#fx{position:fixed;inset:0;z-index:99;pointer-events:none}
+
+@keyframes dropIn{from{transform:translateY(-30px);opacity:0}}
+@keyframes riseIn{from{transform:translateY(40px);opacity:0}}
+@keyframes popIn{from{transform:scale(.7);opacity:0}}
+@keyframes popDown{from{transform:translate(-50%,-14px) scale(.8);opacity:0}}
+@keyframes slideUp{from{transform:translateY(18px);opacity:0}}
+@keyframes pinDrop{0%{transform:translateY(-60px) scale(.4);opacity:0}60%{opacity:1}}
+@keyframes ping{0%{transform:scale(.9);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+@keyframes ripple{0%{transform:scale(.3);opacity:1}100%{transform:scale(1.2);opacity:0}}
+@keyframes breathe{50%{box-shadow:0 0 0 14px rgba(51,204,255,.12),0 3px 8px rgba(0,0,0,.3)}}
+@keyframes bump{40%{transform:scale(1.5)}}
+@keyframes wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@keyframes shine{0%,60%{left:-60%}100%{left:130%}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* DOMI: acceso, rutas y voz; capa añadida sin reemplazar el mapa existente */
+#domiAuth{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:22px;background:linear-gradient(145deg,#f3f7fb,#dceefa);font-family:var(--font)}
+#domiAuth .auth-card{width:min(100%,390px);padding:28px 24px;background:#fff;border-radius:28px;box-shadow:0 18px 60px #1b2a3a25}
+#domiAuth .brand{font-size:32px;font-weight:1000;color:var(--waze-d);letter-spacing:-1px}#domiAuth p{color:var(--muted);margin:5px 0 22px}
+#domiAuth label,#visitModal label,#adminModal label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
+#domiAuth input,#visitModal input,#visitModal textarea,#visitModal select,#adminModal input,#adminModal select{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:13px;background:#f8fbfe;outline-color:var(--waze-d)}
+.domi-primary{width:100%;margin-top:16px;padding:14px;border-radius:14px;background:linear-gradient(135deg,#5ad8ff,var(--waze-d));color:white;font-weight:900}
+#domiError{color:#d83250;font-size:13px;min-height:18px;margin-top:8px}
+#domiTools{position:fixed;z-index:60;top:calc(var(--st) + 190px);left:12px;display:flex;gap:8px;flex-direction:column}
+.domi-tool{background:white;box-shadow:var(--shadow);border-radius:18px;padding:11px 14px;font-weight:900;color:var(--ink);display:flex;align-items:center;gap:7px}
+#domiRoute,#visitModal,#adminModal{position:fixed;inset:0;z-index:9000;background:#15253888;display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.domi-dialog{background:#fff;border-radius:26px 26px 20px 20px;width:min(100%,600px);max-height:88dvh;overflow:auto;padding:20px;box-shadow:var(--shadow)}
+.domi-dialog h2{margin:0 0 5px;font-size:22px}.domi-muted{color:var(--muted);font-size:13px}.domi-stop{display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.domi-stop .stopinfo{flex:1;min-width:0}.domi-stop b{display:block;overflow-wrap:anywhere}.domi-actions{display:flex;gap:8px;margin-top:14px}.domi-actions button{flex:1;padding:12px;border-radius:13px;background:var(--soft);font-weight:900}.domi-actions .primary{background:var(--waze-d);color:white}
+body.auth-locked>#map,body.auth-locked>.top,body.auth-locked>.here,body.auth-locked>.fabs,body.auth-locked>.dock,body.auth-locked>.sheet,body.auth-locked>#modal,body.auth-locked>#domiTools{visibility:hidden}
+@media(min-width:700px){#domiRoute,#visitModal,#adminModal{align-items:center}.domi-dialog{border-radius:26px}}
+
+</style>
+</head>
+<body class="auth-locked">
+
+<div id="domiAuth" role="dialog" aria-modal="true" aria-label="Acceso a DOMI"><form class="auth-card" id="domiLogin"><div class="brand">DOMI<span style="color:#1b2a3a">.</span></div><p>Tu asistente de rutas y talleres</p><label for="domiUser">Correo autorizado</label><input id="domiUser" type="email" autocomplete="username" required maxlength="180" placeholder="tu@empresa.com"><label for="domiPass">Contraseña</label><input id="domiPass" type="password" autocomplete="current-password" required placeholder="Tu contraseña"><button class="domi-primary" type="submit">Entrar</button><div id="domiError" aria-live="polite"></div><small class="domi-muted">Acceso privado para personal autorizado.</small></form></div>
+<div id="domiTools" hidden><button class="domi-tool" id="domiVoice">🎙️ Hablar con DOMI</button><button class="domi-tool" id="domiRouteOpen">🧭 Mi ruta de hoy</button><button class="domi-tool" id="domiAdminOpen" hidden>🔐 Administración</button><button class="domi-tool" id="domiLogout">↪ Salir</button></div>
+<div id="domiRoute" hidden><section class="domi-dialog"><h2>🧭 Mi ruta de hoy</h2><p class="domi-muted" id="routeDate"></p><div id="routeStops">Cargando ruta…</div><div class="domi-actions"><button id="routeClose">Cerrar</button><button class="primary" id="routeNext">🚗 Ir a la siguiente</button></div><p class="domi-muted">Agrega talleres desde su ficha con «Agregar a mi ruta». La ruta queda guardada en el servidor.</p></section></div>
+<div id="visitModal" hidden><section class="domi-dialog"><h2>Registrar visita</h2><p class="domi-muted" id="visitPlace"></p><form id="visitForm"><input type="hidden" id="visitPlaceId"><label>Contacto (nombre / teléfono)</label><input id="visitContact" maxlength="180" placeholder="Nombre y teléfono"><label>¿Quién te atendió?</label><input id="visitAttended" maxlength="180" required placeholder="Nombre de quien atendió"><label>¿Está interesado?</label><select id="visitInterested"><option value="pendiente">Pendiente</option><option value="si">Sí, interesado</option><option value="no">No interesado</option></select><label>Notas</label><textarea id="visitNotes" rows="3" maxlength="2000" placeholder="Acuerdos, seguimiento, observaciones"></textarea><div class="domi-actions"><button type="button" id="visitCancel">Cancelar</button><button class="primary" type="submit">Guardar visita</button></div></form></section></div>
+<div id="adminModal" hidden><section class="domi-dialog"><h2>🔐 Administración DOMI</h2><p class="domi-muted">Solo ADMIN puede consultar el historial global. Por seguridad, las cuentas se crean desde el panel de autenticación de Supabase; nunca se crean contraseñas desde el navegador.</p><h3>Historial de visitas</h3><div id="adminVisits" class="domi-muted">Cargando…</div><div class="domi-actions"><button id="adminClose">Cerrar</button></div></section></div>
+
+<div id="map" role="application" aria-label="Mapa de talleres"></div>
+
+<div class="top" id="top">
+  <form class="sbar" id="sform" role="search" autocomplete="off">
+    <button type="button" class="avatar press" data-act="panel" data-p="prog" id="avatar" aria-label="Ver mi progreso"><span id="mood">😎</span></button>
+    <input id="q" type="search" enterkeyhint="search" placeholder="Talleres cerca de mí…" aria-label="Buscar talleres o lugares">
+    <button type="button" class="sclear" id="qclear" data-act="clearq" aria-label="Borrar" hidden>✕</button>
+    <button type="submit" class="sgo press" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.6-4.6"/></svg></button>
+  </form>
+  <div class="suggest" id="suggest" hidden></div>
+  <div class="quick" id="quick"></div>
+</div>
+
+<button class="here press" id="here" data-act="searchhere" hidden>🔄 Buscar en esta zona</button>
+
+<div class="fabs" id="fabs">
+  <button class="fab press" data-act="base" aria-label="Ir a Nissan Iztacalco">🏁</button>
+  <button class="fab press" id="locBtn" data-act="locate" aria-label="Centrar en mi ubicación"><svg viewBox="0 0 24 24"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z"/></svg></button>
+</div>
+
+<section class="sheet" id="sheet" data-s="closed" aria-live="polite">
+  <div class="grab" id="grab"><i></i></div>
+  <div class="sh-head" id="shHead"></div>
+  <div class="sh-body" id="shBody"></div>
+</section>
+
+<nav class="dock" id="dock" aria-label="Secciones">
+  <button class="dk press" data-act="explore" id="dk-explore"><span class="i">🗺️</span>Explorar</button>
+  <button class="dk press" data-act="domirouteopen" id="dk-list"><span class="i">🧭</span>Mi ruta<span class="badge" id="badge" hidden>0</span></button>
+  <button class="near press" data-act="nearme" aria-label="Talleres cerca de mí"><span>🔧</span><small>Cerca de mí</small></button>
+  <button class="dk press" data-act="nextone" id="dk-next"><span class="i">🎯</span>Próximo</button>
+  <button class="dk press" data-act="panel" data-p="prog" id="dk-prog"><span class="i">🏆</span>Progreso</button>
+</nav>
+
+<div class="radar" id="radar" hidden></div>
+<div class="radar-l" id="radarL" hidden>Buscando talleres…</div>
+
+<div class="navtop" id="navTop" hidden>
+  <div class="nav-ico" id="navIco">↑</div>
+  <div style="min-width:0"><div class="nav-d" id="navDist">Calculando…</div><div class="nav-t" id="navText"></div></div>
+</div>
+<div class="speed" id="speed" hidden><div><span id="spd">0</span><small>km/h</small></div></div>
+<button class="recenter press" id="recenter" data-act="recenter" hidden>◎ Recentrar</button>
+<div class="navbot" id="navBot" hidden>
+  <div class="eta"><b id="navEta">--:--</b><span id="navSum"></span></div>
+  <button class="ib press" id="muteBtn" data-act="mute" aria-label="Voz">🔊</button>
+  <button class="btn warn press" data-act="stopnav">Salir</button>
+</div>
+
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<canvas id="fx"></canvas>
+<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#33ccff"/><stop offset="1" stop-color="#1fc46b"/></linearGradient></defs></svg>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+(function () {
+'use strict';
+if (/[?&]mode=suggestions\b/.test(location.search)) return;
+var BASE = { lat: 19.398374, lng: -99.1219314 };
+var TIPOS = {
+  taller:  { label: 'Taller mecánico', short: 'Taller', emo: '🔧', c: '#33ccff' },
+  susp:    { label: 'Suspensión y frenos', short: 'Suspensión', emo: '⚙️', c: '#8a5cf6' },
+  hoja:    { label: 'Hojalatería y pintura', short: 'Hojalatería', emo: '🎨', c: '#ff7a59' },
+  refa:    { label: 'Refaccionaria', short: 'Refacciones', emo: '🔩', c: '#ffb020' },
+  llantas: { label: 'Llantera / vulcanizadora', short: 'Llantas', emo: '🛞', c: '#4b5d73' }
+};
+var PLURAL = { taller: 'Talleres', susp: 'Frenos y suspensión', hoja: 'Hojalaterías', refa: 'Refaccionarias', llantas: 'Llanteras' };
+function catLabel(cat) { return cat ? PLURAL[cat] : 'Talleres'; }
+var RAW = [[1, "taller", "Taller Mecánico (Eje 3 Ote.)", "Eje 3 Oriente (Azúcar) 57, Granjas México, Iztacalco, CDMX", "", "Granjas México"], [2, "taller", "Servicio Velázquez", "Primera Cda. 16 de Septiembre 37, La Cruz Coyuya, Iztacalco, CDMX", "5556495406", "La Cruz Coyuya"], [3, "taller", "Servicio Jiménez", "C. Avena 279, Granjas México, Iztacalco, CDMX", "5556502529", "Granjas México"], [4, "taller", "Mecánico Automotriz Técnicos Unidos", "Ote. 247-A 188, Agrícola Oriental, Iztacalco, CDMX", "5613333682", "Agrícola Oriental"], [5, "taller", "Taller Mecánico Automotriz Holkan", "Ote. 253 126, Agrícola Oriental, Iztacalco, CDMX", "5543253582", "Agrícola Oriental"], [6, "taller", "Servicio Lago", "Av. Plutarco Elías Calles 1182, Militar Marte, Iztacalco, CDMX", "5555791655", "Militar Marte"], [7, "taller", "Taller Mecánico \"Chino's\"", "Corteza 2, INFONAVIT Iztacalco, Iztacalco, CDMX", "", "INFONAVIT Iztacalco"], [9, "taller", "Centro Automotriz Especializado", "Av. Sur 8 484, Agrícola Oriental, Iztacalco, CDMX", "", "Agrícola Oriental"], [10, "taller", "Automotriz Oriental", "Ote. 235-A 77, Agrícola Oriental, Iztacalco, CDMX", "5568116066", "Agrícola Oriental"], [11, "taller", "Servicio Automotriz KRM", "Ote. 239 30, Agrícola Oriental, Iztacalco, CDMX", "5637577600", "Agrícola Oriental"], [12, "taller", "Wolfsburg (Mechanical workshop)", "Ote. 229 311, Agrícola Oriental, Iztacalco, CDMX", "", "Agrícola Oriental"], [13, "taller", "Alineación y Balanceo", "C. Ote. 245 192, Agrícola Oriental, Iztacalco, CDMX", "", "Agrícola Oriental"], [14, "taller", "Mecánica Automotriz (Javier Rojo Gómez)", "Av. Javier Rojo Gómez 194-B, Agrícola Oriental, Iztacalco, CDMX", "", "Agrícola Oriental"], [15, "taller", "Servicio Automotriz Acosta", "Ret. 8 Sur 20 36, Agrícola Oriental, Iztacalco, CDMX", "5581840736", "Agrícola Oriental"], [16, "susp", "Suspensiones de Oriente", "Agrícola Oriental, Iztacalco, CDMX", "5551156070", "Agrícola Oriental"], [17, "susp", "Suspensiones y Amortiguadores Servicio Santiago (Víctor)", "Av. Santiago 181, San Pedro Iztacalco, Iztacalco, CDMX", "5555908212", "San Pedro Iztacalco"], [18, "susp", "Suspensiones Servicio Piedad", "Viaducto Río de la Piedad 1939, Cuchilla Agrícola Oriental, Iztacalco, CDMX", "5557000670", "Cuchilla Agrícola Oriental"], [19, "hoja", "Vecar Body Shop", "Av. Andrés Molina Enríquez 132, San Pedro Iztacalco, Iztacalco, CDMX", "5582531541", "San Pedro Iztacalco"], [20, "hoja", "Servicio de Hojalatería Rodríguez", "C. 34 Mz 35 Lt 7, El Rodeo, Iztacalco, CDMX", "", "El Rodeo"], [21, "hoja", "Hojalatería y Pintura \"Express\"", "C. 22, El Rodeo, Iztacalco, CDMX", "5523079584", "El Rodeo"], [22, "hoja", "Hojalatería y Pintura Montaño", "Carlos Pereyra 22, Viaducto Piedad, Iztacalco, CDMX", "5555302858", "Viaducto Piedad"], [23, "hoja", "Taller de Hojalatería y Pintura \"Eryc Car\"", "Ote. 247-B 177, Agrícola Oriental, Iztacalco, CDMX", "5518779299", "Agrícola Oriental"], [24, "hoja", "Servicio Jaimes Repintado Automotriz", "Miguel García García 72, Campamento 2 de Octubre, Iztacalco, CDMX", "", "Campamento 2 de Octubre"], [25, "refa", "Grand Prix Refaccionaria Automotriz", "Ote. 235-C 72, Agrícola Oriental, Iztacalco, CDMX", "", "Agrícola Oriental"], [26, "refa", "Casa Ito", "Eje 2 Ote. (Calz. de la Viga) 526, Santa Anita, Iztacalco, CDMX", "5555199894", "Santa Anita"], [27, "refa", "Autopartes y Transmisiones 518", "Av. Plutarco Elías Calles 518, Granjas México, Iztacalco, CDMX", "5633307091", "Granjas México"], [28, "refa", "Refaccionaria Hidalgo", "Av. Plutarco Elías Calles 754, San Pedro Iztacalco, Iztacalco, CDMX", "5555909940", "San Pedro Iztacalco"], [29, "refa", "Refaccionaria Gaona Ramos Millán", "Sur 149 2103, Gabriel Ramos Millán, Iztacalco, CDMX", "5556484667", "Gabriel Ramos Millán"], [30, "refa", "Ultra Partes Iztacalco", "Pascual Orozco 70, Barrio San Miguel, Iztacalco, CDMX", "5580525839", "Barrio San Miguel"], [31, "refa", "AC Delco Iztacalco", "H. Congreso de la Unión 622, Barrio de Zapotla, Iztacalco, CDMX", "5586072793", "Barrio de Zapotla"], [32, "refa", "Refaccionaria Duran Duran", "Canela 74, Granjas México, Iztacalco, CDMX", "", "Granjas México"]];
+var GEO = {"1":[19.402445,-99.10514,"col"],"2":null,"3":[19.402891,-99.106026,"dir"],"4":[19.404564,-99.069504,"col"],"5":[19.402898,-99.080664,"dir"],"6":[19.381014,-99.128638,"col"],"7":[19.382766,-99.108198,"dir"],"9":[19.404564,-99.069504,"col"],"10":[19.404564,-99.069504,"col"],"11":[19.399282,-99.083197,"col"],"12":[19.399282,-99.083197,"col"],"13":[19.404564,-99.069504,"col"],"14":[19.395947,-99.072983,"dir"],"15":[19.404564,-99.069504,"col"],"16":[19.404564,-99.069504,"col"],"17":[19.391201,-99.13238,"dir"],"18":[19.406734,-99.080158,"dir"],"19":[19.389483,-99.129122,"dir"],"20":[19.390469,-99.086244,"dir"],"21":[19.393836,-99.084905,"dir"],"22":[19.401302,-99.131585,"col"],"23":[19.404564,-99.069504,"col"],"24":null,"25":[19.404564,-99.069504,"col"],"26":[19.40367,-99.121549,"col"],"27":[19.402445,-99.10514,"col"],"28":[19.393773,-99.131682,"dir"],"29":[19.385987,-99.092885,"dir"],"30":null,"31":null,"32":[19.39896,-99.106232,"dir"]};
+var FIXED = RAW.map(function (r) { return { id: String(r[0]), tipo: r[1], nombre: r[2], dir: r[3], tel: r[4], col: r[5], fixed: true }; });
+var P = {};
+FIXED.forEach(function (p) { P[p.id] = p; });
+
+/* ---------- almacenamiento ---------- */
+function lsGet(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+var S = {
+  pos: null, heading: null, speed: null,
+  visited: lsGet('tn.visited', {}), fav: lsGet('tn.fav', {}), notes: lsGet('tn.notes', {}), mine: lsGet('tn.mine', {}), geo: lsGet('tn.geo', {}),
+  panel: null, sheet: 'closed', back: [], sel: null, res: null,
+  list: { seg: 'pend', tipo: 'all', q: '' }, armed: null
+};
+Object.keys(S.mine).forEach(function (k) { P[k] = S.mine[k]; });
+
+/* ---------- utilidades ---------- */
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function norm(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+function fmtTel(t) { return t && t.length === 10 ? t.slice(0, 2) + ' ' + t.slice(2, 6) + ' ' + t.slice(6) : (t || ''); }
+function fmtDist(m) { return m < 1000 ? (Math.round(m / 10) * 10) + ' m' : (m / 1000).toFixed(1) + ' km'; }
+function fmtMin(sec) { var m = Math.max(1, Math.round(sec / 60)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
+function fmtDate(iso) { try { return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }); } catch (e) { return ''; } }
+function haversine(a, b) {
+  var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+  var x = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function T(p) { return TIPOS[p.tipo] || TIPOS.taller; }
+function inList(p) { return !!(p && (p.fixed || S.mine[p.id])); }
+function listItems() { return FIXED.concat(Object.keys(S.mine).map(function (k) { return S.mine[k]; })); }
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms || 20); } catch (e) {} }
+var toastTimer;
+function toast(msg, ms) { var el = $('toast'); el.hidden = true; void el.offsetWidth; el.textContent = msg; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, ms || 3200); }
+var CHECK = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+
+/* Posición de los talleres fijos; si varios caen en el mismo punto (centro de colonia) se abren en espiral. */
+function rawPos(p) {
+  if (!p.fixed) return (p.lat != null) ? { lat: p.lat, lng: p.lng, k: 'pt' } : null;
+  var g = GEO[p.id]; if (g) return { lat: g[0], lng: g[1], k: g[2] };
+  return S.geo[p.id] || null;
+}
+var spreadCache = null;
+function posOf(p) {
+  if (!p) return null;
+  var g = rawPos(p); if (!g || !p.fixed) return g;
+  if (!spreadCache) {
+    spreadCache = {}; var groups = {};
+    FIXED.forEach(function (f) { var q = rawPos(f); if (!q) return; var key = q.lat.toFixed(5) + ',' + q.lng.toFixed(5); (groups[key] = groups[key] || []).push(f.id); });
+    Object.keys(groups).forEach(function (key) {
+      var ids = groups[key];
+      ids.forEach(function (id, i) {
+        var q = rawPos(P[id]);
+        if (ids.length < 2) { spreadCache[id] = q; return; }
+        var ang = i * 2.4, rad = (45 + 32 * Math.sqrt(i)) / 111000;
+        spreadCache[id] = { lat: q.lat + rad * Math.sin(ang), lng: q.lng + rad * Math.cos(ang) / Math.cos(q.lat * Math.PI / 180), k: 'col' };
+      });
+    });
+  }
+  return spreadCache[p.id] || g;
+}
+function distTo(p) { var g = posOf(p); return (g && S.pos) ? haversine(S.pos, g) : null; }
+function etaGuess(m) { return fmtMin(m * 1.35 / (22000 / 3600)); }
+
+/* ---------- confeti ---------- */
+function confetti() {
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var c = $('fx'), ctx = c.getContext('2d'), d = window.devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+  c.width = W * d; c.height = H * d; ctx.scale(d, d);
+  var cols = ['#33ccff', '#1fc46b', '#ffc531', '#ff4d6d', '#8a5cf6', '#ff7a59'], parts = [];
+  for (var i = 0; i < 110; i++) parts.push({ x: W / 2, y: H * .45, vx: (Math.random() - .5) * 14, vy: -Math.random() * 15 - 4, s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: cols[i % cols.length] });
+  var t0 = performance.now();
+  (function f(t) {
+    var k = (t - t0) / 1800; ctx.clearRect(0, 0, W, H);
+    if (k >= 1) return;
+    parts.forEach(function (p) { p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.globalAlpha = 1 - k; ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 3, p.s, p.s * .66); ctx.restore(); });
+    requestAnimationFrame(f);
+  })(t0);
+}
+
+/* ---------- acciones sobre talleres ---------- */
+function addMine(p) {
+  if (inList(p)) return;
+  var g = posOf(p);
+  S.mine[p.id] = { id: p.id, tipo: p.tipo, nombre: p.nombre, dir: p.dir || '', tel: p.tel || '', col: p.col || '', lat: g.lat, lng: g.lng, hours: p.hours || '', web: p.web || '', added: new Date().toISOString() };
+  P[p.id] = S.mine[p.id]; lsSet('tn.mine', S.mine);
+  buzz(25); toast('➕ ' + p.nombre + ' agregado a tu lista');
+  var b = $('badge'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+  refreshAll();
+}
+function removeMine(id) {
+  var p = S.mine[id]; if (!p) return;
+  delete S.mine[id]; delete S.visited[id]; delete S.fav[id]; delete S.notes[id];
+  lsSet('tn.mine', S.mine); lsSet('tn.visited', S.visited); lsSet('tn.fav', S.fav); lsSet('tn.notes', S.notes);
+  toast('Quitado de tu lista'); refreshAll();
+}
+function toggleVisited(id) {
+  var p = P[id]; if (!p) return;
+  if (!inList(p)) addMine(p);
+  if (S.visited[id]) { delete S.visited[id]; toast('Visita desmarcada'); }
+  else {
+    S.visited[id] = new Date().toISOString(); buzz([20, 40, 30]); confetti();
+    var n = doneCount(), tot = listItems().length;
+    toast(n === tot ? '🏆 ¡Visitaste todos! ' + n + '/' + tot : '🎉 ¡Visitado! Llevas ' + n + ' de ' + tot);
+  }
+  lsSet('tn.visited', S.visited); refreshAll();
+}
+function toggleFav(id) {
+  if (S.fav[id]) delete S.fav[id]; else { S.fav[id] = 1; buzz(15); }
+  lsSet('tn.fav', S.fav); refreshAll();
+}
+function doneCount() { return listItems().filter(function (p) { return S.visited[p.id]; }).length; }
+
+/* ---------- encabezado / dock ---------- */
+function moodFor(pc) { return pc >= 100 ? '🏆' : pc >= 70 ? '🤩' : pc >= 35 ? '😎' : pc > 0 ? '🙂' : '😴'; }
+function renderTop() {
+  var all = listItems(), n = doneCount(), pc = all.length ? Math.round(n / all.length * 100) : 0;
+  $('avatar').style.setProperty('--p', pc); $('mood').textContent = moodFor(pc);
+  var pend = all.length - n, b = $('badge'); b.textContent = pend; b.hidden = !pend;
+  ['explore', 'list', 'prog'].forEach(function (k) { $('dk-' + k).setAttribute('aria-current', String((S.panel || 'explore') === k || (k === 'explore' && (S.panel === 'results' || S.panel === 'detail' || !S.panel)))); });
+}
+var QUICK = [
+  { t: '📍 Talleres cerca de mí', q: 'talleres cerca de mí', hot: 1 },
+  { t: '🔩 Refaccionarias', cat: 'refa' }, { t: '🛞 Llanteras', cat: 'llantas' },
+  { t: '🎨 Hojalatería', cat: 'hoja' }, { t: '⚙️ Frenos y suspensión', cat: 'susp' },
+  { t: '⭐ Favoritos', fav: 1 }
+];
+function renderQuick() {
+  $('quick').innerHTML = QUICK.map(function (x, i) {
+    return '<button class="qc press' + (x.hot ? ' hot' : '') + '" style="--i:' + i + '" data-act="quick" data-i="' + i + '">' + esc(x.t) + '</button>';
+  }).join('');
+}
+
+/* ---------- panel deslizable ---------- */
+function setSheet(s) {
+  S.sheet = s; $('sheet').dataset.s = s;
+  document.body.classList.toggle('sheet-up', s === 'half' || s === 'full');
+}
+function openPanel(name, opts) {
+  opts = opts || {};
+  if (S.panel && S.panel !== name && !opts.noPush) S.back.push({ panel: S.panel, sel: S.sel });
+  if (opts.reset) S.back = [];
+  S.panel = name;
+  renderSheet(true);
+  setSheet(opts.state || (S.sheet === 'full' ? 'full' : 'half'));
+  renderTop();
+}
+function goBack() {
+  var b = S.back.pop();
+  if (!b) { closePanel(); return; }
+  var prevSel = S.sel; S.panel = b.panel; S.sel = b.sel; if (prevSel) refreshMarker(prevSel); if (S.sel) refreshMarker(S.sel);
+  renderSheet(true); renderTop();
+}
+function closePanel() {
+  var p = S.sel; S.panel = null; S.sel = null; S.back = []; setSheet('closed'); if (p) refreshMarker(p); renderTop();
+}
+function head(title, sub, opts) {
+  opts = opts || {};
+  return (S.back.length ? '<button class="ib press" data-act="back" aria-label="Atrás">←</button>' : '') +
+    (opts.av || '') +
+    '<div class="tt" data-act="togglesheet"><h3>' + title + '</h3>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
+    '<button class="ib press" data-act="close" aria-label="Cerrar">✕</button>';
+}
+function renderSheet(anim) {
+  var h = '', b = '';
+  if (S.panel === 'results') { var r = renderResults(); h = r[0]; b = r[1]; }
+  else if (S.panel === 'detail') { var d = renderDetail(); h = d[0]; b = d[1]; }
+  else if (S.panel === 'list') { var l = renderList(); h = l[0]; b = l[1]; }
+  else if (S.panel === 'prog') { var g = renderProg(); h = g[0]; b = g[1]; }
+  else return;
+  var body = $('shBody'), keep = !anim ? body.scrollTop : 0, f = document.activeElement, fid = f && f.id;
+  $('shHead').innerHTML = h; body.innerHTML = '<div class="' + (anim ? 'anim' : '') + '">' + b + '</div>';
+  body.scrollTop = keep;
+  if (fid && $(fid) && fid !== 'q') { var el = $(fid); el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} }
+}
+
+/* resultados de búsqueda */
+function cardResult(p, i) {
+  var t = T(p), d = distTo(p), on = inList(p);
+  return '<li style="--i:' + i + '"><div class="rc" data-act="detail" data-id="' + esc(p.id) + '" role="button" tabindex="0">' +
+    '<div class="av" style="--c:' + t.c + '">' + t.emo + '</div>' +
+    '<div class="rc-i"><div class="nm">' + esc(p.nombre) + '</div><div class="meta"><span class="tag" style="--c:' + t.c + '">' + esc(t.short) + '</span>' +
+    (d != null ? '<span class="dist">' + fmtDist(d) + '</span>' : '') + (S.visited[p.id] ? '<span class="when">✓ Visitado</span>' : '') + '</div>' +
+    (p.dir ? '<div class="addr">' + esc(p.dir) + '</div>' : '') + '</div>' +
+    '<button class="add press' + (on ? ' on' : '') + '" data-act="' + (on ? 'detail' : 'add') + '" data-id="' + esc(p.id) + '">' + (on ? '✓ En lista' : '＋ Agregar') + '</button></div></li>';
+}
+function renderResults() {
+  var r = S.res;
+  if (!r) return [head('Buscar'), ''];
+  if (r.loading) return [head('Buscando…', esc(r.label)), '<div class="cards">' + [0, 1, 2, 3].map(function () { return '<div class="skel"></div>'; }).join('') + '</div>'];
+  var items = r.items.filter(function (p) { return r.filter === 'all' || p.tipo === r.filter; });
+  var present = {}; r.items.forEach(function (p) { present[p.tipo] = 1; });
+  var chips = '';
+  if (Object.keys(present).length > 1) {
+    chips = '<div class="chips"><button class="chip" data-act="rfilter" data-v="all" aria-pressed="' + (r.filter === 'all') + '">Todos ' + r.items.length + '</button>' +
+      Object.keys(TIPOS).filter(function (k) { return present[k]; }).map(function (k) { return '<button class="chip" data-act="rfilter" data-v="' + k + '" aria-pressed="' + (r.filter === k) + '">' + TIPOS[k].emo + ' ' + esc(TIPOS[k].short) + '</button>'; }).join('') + '</div>';
+  }
+  var title = r.items.length ? r.items.length + (r.items.length === 1 ? ' lugar encontrado' : ' lugares encontrados') : 'Sin resultados';
+  var body = chips;
+  if (!r.loading && r.src === 'google') body += '<div class="lbl" style="margin:-4px 0 8px">Resultados de Google Maps</div>';
+  else if (!r.loading && r.src === 'inegi') body += '<div class="lbl" style="margin:-4px 0 8px">Resultados del INEGI (DENUE)</div>';
+  else if (!r.loading && r.src === 'osm' && !itoken()) body += '<button class="btn press" style="width:100%;margin-bottom:10px;background:var(--soft);color:var(--ink)" data-act="itoken">🔑 ¿Pocos talleres aquí? Conecta el INEGI gratis para ver todos</button>';
+  if (r.local && r.local.length) body += '<div class="lbl">En tu lista</div><ul class="cards" style="margin-bottom:14px">' + r.local.map(cardResult).join('') + '</ul>';
+  if (items.length) {
+    var newOnes = items.filter(function (p) { return !inList(p); }).length;
+    if (newOnes > 1) body += '<button class="btn dark press" style="width:100%;margin-bottom:10px" data-act="addall">＋ Agregar los ' + newOnes + ' nuevos a mi lista</button>';
+    body += '<ul class="cards">' + items.map(cardResult).join('') + '</ul>';
+  } else if (!r.local || !r.local.length) {
+    body += '<div class="empty"><span class="big">' + (r.error ? '📡' : '🔍') + '</span>' +
+      (r.error ? 'No pude conectar con el servicio de mapas. Revisa tu conexión e intenta otra vez.' : 'No encontré talleres por aquí. Aleja el mapa y toca <b>Buscar en esta zona</b>, o prueba otro lugar.') + '</div>';
+  }
+  return [head(title, esc(r.label)), body];
+}
+
+/* detalle */
+function renderDetail() {
+  var p = P[S.sel]; if (!p) return [head('—'), ''];
+  var t = T(p), d = distTo(p), on = inList(p), v = S.visited[p.id], f = S.fav[p.id], g = posOf(p);
+  var badges = (on ? '<span class="bdg list">' + (p.fixed ? '📋 Ruta Iztacalco' : '📋 En mi lista') + '</span>' : '<span class="bdg">✨ Nuevo lugar</span>') +
+    (v ? '<span class="bdg ok">✓ Visitado ' + esc(fmtDate(v)) + '</span>' : '') + (f ? '<span class="bdg fav">★ Favorito</span>' : '');
+  var av = '<div class="av big" style="--c:' + t.c + '">' + t.emo + '</div>';
+  var sub = '<span class="tag" style="--c:' + t.c + '">' + esc(t.short) + '</span>' + (d != null ? ' · <b class="dist">' + fmtDist(d) + '</b>' : '');
+  var tel = (p.tel || '').replace(/\D/g, '');
+  var b = '<div class="badges" style="margin:-4px 0 12px">' + badges + '</div>' +
+    '<button class="go press" data-act="nav" data-id="' + esc(p.id) + '">🚗 ¡Vámonos!' + (d != null ? ' <small>~' + etaGuess(d) + '</small>' : '') + '</button>' +
+    '<button class="btn press" style="width:100%;margin:8px 0;background:#eaf8ff;color:#087da8" data-act="domiroute" data-id="' + esc(p.id) + '" data-name="' + esc(p.nombre) + '" data-address="' + esc(p.dir || p.col || '') + '" data-lat="' + (g ? g.lat : '') + '" data-lng="' + (g ? g.lng : '') + '" data-phone="' + esc(p.tel || '') + '">🧭 Agregar a mi ruta de hoy</button>' +
+    '<div class="acts">' +
+      (p.fixed ? '<button class="act on" data-act="toast" data-msg="Este taller es parte de tu ruta base"><span class="c">📋</span>En ruta</button>'
+        : '<button class="act' + (on ? ' on' : '') + '" data-act="' + (on ? 'remove' : 'add') + '" data-id="' + esc(p.id) + '"><span class="c">' + (on ? '✓' : '＋') + '</span>' + (on ? 'En mi lista' : 'Agregar') + '</button>') +
+      '<button class="act ok' + (v ? ' on' : '') + '" data-act="toggle" data-id="' + esc(p.id) + '"><span class="c">✅</span>' + (v ? 'Visitado' : 'Marcar visita') + '</button>' +
+      '<button class="act fv' + (f ? ' on' : '') + '" data-act="fav" data-id="' + esc(p.id) + '"><span class="c">' + (f ? '★' : '☆') + '</span>Favorito</button>' +
+      (tel ? '<a class="act" href="tel:' + (tel.length === 10 ? '+52' : '') + tel + '"><span class="c">📞</span>Llamar</a>'
+        : '<a class="act" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.nombre + (g ? ' ' + g.lat + ',' + g.lng : '')) + '"><span class="c">🔎</span>Más info</a>') +
+    '</div>' +
+    '<div class="inf">' +
+      '<div>📍<span>' + (p.dir ? esc(p.dir) : '<span style="color:var(--muted)">Buscando dirección…</span>') + (g && g.k === 'col' ? '<br><small style="color:var(--muted)">Ubicación aproximada (centro de la colonia)</small>' : '') + '</span></div>' +
+      '<div>📞<span>' + (tel ? '<a href="tel:' + (tel.length === 10 ? '+52' : '') + tel + '">' + esc(fmtTel(tel)) + '</a>' : '<span style="color:var(--muted)">Sin teléfono registrado</span>') + '</span></div>' +
+      (p.hours ? '<div>🕒<span>' + esc(p.hours) + '</span></div>' : '') +
+      (p.web ? '<div>🌐<a href="' + esc(/^https?:/.test(p.web) ? p.web : 'https://' + p.web) + '" target="_blank" rel="noopener">' + esc(p.web.replace(/^https?:\/\//, '')) + '</a></div>' : '') +
+    '</div>' +
+    (g ? '<div class="row2"><a class="btn press" target="_blank" rel="noopener" href="https://waze.com/ul?ll=' + g.lat + ',' + g.lng + '&navigate=yes">🚙 Abrir en Waze</a>' +
+      '<a class="btn press" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + g.lat + ',' + g.lng + '">🗺️ Google Maps</a></div>' : '') +
+    (on ? '<div class="lbl">📝 Notas de la visita</div><textarea class="note" id="note" data-id="' + esc(p.id) + '" placeholder="Ej. Hablar con el encargado, le interesa…">' + esc(S.notes[p.id] || '') + '</textarea>' : '');
+  return [head(esc(p.nombre), sub, { av: av }), b];
+}
+
+/* mi lista */
+var SEGS = [['pend', 'Pendientes'], ['done', 'Visitados'], ['fav', 'Favoritos'], ['all', 'Todos']];
+function renderList() {
+  var L = S.list, all = listItems(), q = norm(L.q.trim());
+  var items = all.filter(function (p) {
+    var v = !!S.visited[p.id];
+    if (L.seg === 'pend' && v) return false; if (L.seg === 'done' && !v) return false; if (L.seg === 'fav' && !S.fav[p.id]) return false;
+    if (L.tipo !== 'all' && p.tipo !== L.tipo) return false;
+    return !q || norm(p.nombre + ' ' + p.dir + ' ' + p.col + ' ' + (S.notes[p.id] || '')).indexOf(q) >= 0;
+  });
+  if (S.pos) items.sort(function (a, b) { var x = distTo(a), y = distTo(b); return (x == null ? 1e12 : x) - (y == null ? 1e12 : y); });
+  else if (L.seg === 'done') items.sort(function (a, b) { return S.visited[b.id] > S.visited[a.id] ? 1 : -1; });
+  var segIdx = SEGS.map(function (s) { return s[0]; }).indexOf(L.seg);
+  var present = {}; all.forEach(function (p) { present[p.tipo] = 1; });
+  var body = '<div class="seg"><span class="thumb" style="transform:translateX(' + (segIdx * 100) + '%)"></span>' +
+    SEGS.map(function (s) { return '<button data-act="seg" data-v="' + s[0] + '" aria-pressed="' + (L.seg === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>' +
+    '<input class="find" id="lfind" type="search" placeholder="🔎 Filtrar por nombre, calle, colonia o nota" value="' + esc(L.q) + '">' +
+    '<div class="chips"><button class="chip" data-act="ltipo" data-v="all" aria-pressed="' + (L.tipo === 'all') + '">Todos</button>' +
+    Object.keys(TIPOS).filter(function (k) { return present[k]; }).map(function (k) { return '<button class="chip" data-act="ltipo" data-v="' + k + '" aria-pressed="' + (L.tipo === k) + '">' + TIPOS[k].emo + ' ' + esc(TIPOS[k].short) + '</button>'; }).join('') + '</div>' +
+    '<div class="row2"><button class="btn pri press" data-act="nextone">🎯 Próximo cercano</button><button class="btn press" data-act="fitlist">🗺️ Ver en mapa</button></div>' +
+    '<div class="count">' + items.length + (items.length === 1 ? ' taller' : ' talleres') + (S.pos ? ' · ordenados por cercanía' : '') + '</div>';
+  if (!items.length) {
+    body += '<div class="empty"><span class="big">' + (L.seg === 'pend' ? '🏆' : L.seg === 'fav' ? '⭐' : '📭') + '</span>' +
+      (L.seg === 'pend' && !q ? '¡No tienes pendientes! Busca más talleres con el botón 🔧.' : L.seg === 'fav' ? 'Toca la ☆ de un taller para tenerlo aquí.' : L.seg === 'done' ? 'Aún no marcas visitas.' : 'Nada con ese filtro.') + '</div>';
+  } else {
+    body += '<ul class="cards">' + items.map(function (p, i) {
+      var t = T(p), v = S.visited[p.id], d = distTo(p);
+      return '<li class="lc' + (v ? ' done' : '') + '" style="--i:' + Math.min(i, 12) + '">' +
+        '<button class="chk" data-act="toggle" data-id="' + esc(p.id) + '" aria-pressed="' + !!v + '" aria-label="Marcar visitado"><span class="box">' + CHECK + '</span></button>' +
+        '<button class="lc-i" data-act="detail" data-id="' + esc(p.id) + '"><div class="nm">' + t.emo + ' ' + esc(p.nombre) + '</div>' +
+        '<div class="meta"><span class="tag" style="--c:' + t.c + '">' + esc(t.short) + '</span>' + (d != null ? '<span class="dist">' + fmtDist(d) + '</span>' : '') +
+        (p.fixed ? '' : '<span class="new">Agregado</span>') + (v ? '<span class="when">✓ ' + esc(fmtDate(v)) + '</span>' : '<span>' + esc(p.col || '') + '</span>') + '</div>' +
+        (S.notes[p.id] ? '<div class="addr">📝 ' + esc(S.notes[p.id].slice(0, 70)) + '</div>' : '') + '</button>' +
+        '<button class="star' + (S.fav[p.id] ? ' on' : '') + '" data-act="fav" data-id="' + esc(p.id) + '" aria-label="Favorito">★</button></li>';
+    }).join('') + '</ul>';
+  }
+  return [head('Mi lista', all.length + ' talleres · ' + doneCount() + ' visitados'), body];
+}
+
+/* progreso */
+function renderProg() {
+  var all = listItems(), n = doneCount(), tot = all.length, pc = tot ? n / tot : 0;
+  var now = new Date(), today = now.toDateString(), wk = now.getTime() - 7 * 864e5, hoy = 0, sem = 0;
+  Object.keys(S.visited).forEach(function (k) { if (!P[k] || !inList(P[k])) return; var d = new Date(S.visited[k]); if (d.toDateString() === today) hoy++; if (d.getTime() >= wk) sem++; });
+  var bars = Object.keys(TIPOS).map(function (k) {
+    var a = all.filter(function (p) { return p.tipo === k; }); if (!a.length) return '';
+    var d = a.filter(function (p) { return S.visited[p.id]; }).length;
+    return '<div><div class="h"><span>' + TIPOS[k].emo + ' ' + esc(TIPOS[k].short) + '</span><span>' + d + '/' + a.length + '</span></div><i style="--c:' + TIPOS[k].c + ';--w:' + (d / a.length * 100) + '%"></i></div>';
+  }).join('');
+  var msg = pc >= 1 ? '¡Ruta completa, eres leyenda!' : pc >= .7 ? '¡Ya casi! Sigue así.' : pc >= .35 ? '¡Vas muy bien!' : n ? '¡Buen arranque!' : '¡A rodar! Marca tu primera visita.';
+  var body = '<div class="prog"><div class="ring"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="50"/><circle class="fg" id="ringFg" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16"/></svg>' +
+    '<b><span>' + Math.round(pc * 100) + '%<small>' + n + ' de ' + tot + '</small></span></b></div>' +
+    '<div><span class="mood">' + moodFor(Math.round(pc * 100)) + '</span><div style="font:900 18px var(--font);margin-top:4px">' + msg + '</div></div></div>' +
+    '<div class="stats"><div class="stat"><b>' + hoy + '</b><span>Visitas hoy</span></div><div class="stat"><b>' + sem + '</b><span>Últimos 7 días</span></div>' +
+    '<div class="stat"><b>' + Object.keys(S.mine).length + '</b><span>Talleres agregados</span></div><div class="stat"><b>' + Object.keys(S.fav).filter(function (k) { return P[k]; }).length + '</b><span>Favoritos</span></div></div>' +
+    '<div class="lbl">Por tipo</div><div class="bars">' + bars + '</div>' +
+    (itokenBuiltin() ? '' : '<button class="btn press" style="width:100%;margin:12px 0 0;background:var(--soft);color:var(--ink)" data-act="itoken">🔑 ' + (itoken() ? 'INEGI conectado (todo México) · cambiar token' : 'Conectar INEGI gratis para buscar en todo México') + '</button>') +
+    '<div class="row2"><button class="btn warn press" data-act="reset" data-v="visits">' + (S.armed === 'visits' ? '¿Seguro? Toca otra vez' : 'Borrar visitas') + '</button>' +
+    '<button class="btn warn press" data-act="reset" data-v="mine">' + (S.armed === 'mine' ? '¿Seguro? Toca otra vez' : 'Quitar agregados') + '</button></div>';
+  setTimeout(function () { var r = $('ringFg'); if (r) r.style.strokeDashoffset = String(314.16 * (1 - pc)); }, 60);
+  return [head('Mi progreso', 'Se guarda en este teléfono'), body];
+}
+
+function refreshAll() {
+  renderTop();
+  if (S.panel) renderSheet(false);
+  syncMarkers();
+}
+
+/* ---------- mapa ---------- */
+var MAP = { map: null, mk: {}, me: null, ctr: null, watch: null, progUntil: 0 };
+function pinKey(p) { return [p.tipo, inList(p) ? 'l' : 'f', S.visited[p.id] ? 'v' : '', S.fav[p.id] ? 's' : '', S.sel === p.id ? 'x' : ''].join(''); }
+function pinIcon(p, drop, delay) {
+  var t = T(p), on = inList(p), cls = 'pin' + (on ? '' : ' found') + (S.visited[p.id] ? ' ok' : '') + (S.sel === p.id ? ' sel' : '') + (drop ? ' drop' : '');
+  var html = '<div class="' + cls + '" style="--c:' + t.c + ';--d:' + (delay || 0) + 'ms">' + t.emo + (S.visited[p.id] ? '<i>✓</i>' : '') + (S.fav[p.id] ? '<i class="f">★</i>' : '') + '</div>';
+  return L.divIcon({ className: '', html: html, iconSize: [40, 48], iconAnchor: [20, 50] });
+}
+function syncMarkers() {
+  if (!MAP.map) return;
+  var want = {}, n = 0;
+  listItems().forEach(function (p) { want[p.id] = p; });
+  if (S.res && S.res.items) S.res.items.forEach(function (p) { want[p.id] = p; });
+  Object.keys(MAP.mk).forEach(function (id) { if (!want[id]) { MAP.map.removeLayer(MAP.mk[id]); delete MAP.mk[id]; } });
+  Object.keys(want).forEach(function (id) {
+    var p = want[id], g = posOf(p); if (!g) return;
+    var m = MAP.mk[id], key = pinKey(p);
+    if (!m) {
+      m = L.marker([g.lat, g.lng], { icon: pinIcon(p, true, Math.min(n++, 30) * 25), title: p.nombre, keyboard: true, riseOnHover: true }).addTo(MAP.map);
+      m.on('click', function () { showDetail(id, true); });
+      m._k = key; MAP.mk[id] = m;
+    } else {
+      m.setLatLng([g.lat, g.lng]);
+      if (m._k !== key) { m.setIcon(pinIcon(p)); m._k = key; }
+    }
+    m.setZIndexOffset(S.sel === id ? 1000 : inList(p) ? 100 : 0);
+  });
+}
+function refreshMarker(id) { var m = MAP.mk[id], p = P[id]; if (m && p) { m.setIcon(pinIcon(p)); m._k = pinKey(p); m.setZIndexOffset(S.sel === id ? 1000 : inList(p) ? 100 : 0); } }
+function sheetPad() { var s = $('sheet'); return S.sheet === 'closed' ? 120 : Math.min(s.getBoundingClientRect().height, innerHeight * .55) + 40; }
+function progMove(fn) { MAP.progUntil = Date.now() + 1500; fn(); }
+function flyTo(g, z) {
+  if (!MAP.map || !g) return;
+  progMove(function () {
+    var zoom = Math.max(MAP.map.getZoom(), z || 16), pt = MAP.map.project([g.lat, g.lng], zoom);
+    pt.y += (sheetPad() - 150) / 2;
+    MAP.map.flyTo(MAP.map.unproject(pt, zoom), zoom, { duration: .7 });
+  });
+}
+function fitPoints(pts) {
+  if (!MAP.map || !pts.length) return;
+  progMove(function () { MAP.map.flyToBounds(L.latLngBounds(pts), { paddingTopLeft: [40, 150], paddingBottomRight: [40, sheetPad()], maxZoom: 16, duration: .8 }); });
+}
+function initMap() {
+  if (typeof L === 'undefined') return false;
+  MAP.map = L.map('map', { zoomControl: false, attributionControl: true, tap: true }).setView([BASE.lat, BASE.lng], 14);
+  MAP.map.attributionControl.setPrefix(false); MAP.map.attributionControl.setPosition('bottomleft');
+  var tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri · Negocios: INEGI (DENUE), Overture Maps, OpenStreetMap', className: 'tiles' }).addTo(MAP.map);
+  var bad = 0, ok = 0;
+  tiles.on('tileload', function () { ok++; });
+  tiles.on('tileerror', function () { if (++bad > 6 && !ok) { MAP.map.removeLayer(tiles); tiles.off(); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap', className: 'tiles' }).addTo(MAP.map); } });
+  L.marker([BASE.lat, BASE.lng], { icon: L.divIcon({ className: '', html: '<div class="basepin">🏁</div>', iconSize: [42, 42], iconAnchor: [21, 21] }), title: 'Nissan Iztacalco', zIndexOffset: -100 })
+    .addTo(MAP.map).on('click', function () { toast('🏁 Nissan Iztacalco (tu base)'); });
+  MAP.map.on('click', function () { if (S.sheet === 'half' || S.sheet === 'full') setSheet('min'); hideSuggest(); });
+  MAP.map.on('contextmenu', function (e) { buzz(30); searchAt({ lat: e.latlng.lat, lng: e.latlng.lng }, 1500, null, 'Alrededor del punto que marcaste'); });
+  MAP.map.on('dragstart', function () { if (NAV.on) { NAV.follow = false; $('recenter').hidden = false; } });
+  MAP.map.on('moveend', onMoveEnd);
+  syncMarkers();
+  var pts = FIXED.map(posOf).filter(Boolean).map(function (g) { return [g.lat, g.lng]; });
+  if (pts.length) MAP.map.fitBounds(pts, { paddingTopLeft: [30, 150], paddingBottomRight: [30, 200] });
+  return true;
+}
+function onMoveEnd() {
+  if (NAV.on || Date.now() < MAP.progUntil || !S.res || S.res.loading) return;
+  var c = MAP.map.getCenter(), moved = haversine({ lat: c.lat, lng: c.lng }, S.res.center);
+  if (moved > S.res.radius * .45 || Math.abs(MAP.map.getZoom() - (S.res.zoom || MAP.map.getZoom())) >= 2) $('here').hidden = false;
+}
+function viewRadius() {
+  var b = MAP.map.getBounds(), c = MAP.map.getCenter();
+  var w = haversine({ lat: c.lat, lng: b.getWest() }, { lat: c.lat, lng: b.getEast() });
+  return Math.max(700, Math.min(6000, w * .6));
+}
+function startGPS() {
+  if (!navigator.geolocation || MAP.watch != null) return;
+  MAP.watch = navigator.geolocation.watchPosition(function (p) {
+    var first = !S.pos;
+    S.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+    S.speed = p.coords.speed; S.heading = (p.coords.heading != null && !isNaN(p.coords.heading) && p.coords.speed > .8) ? p.coords.heading : S.heading;
+    if (MAP.map) {
+      var dir = S.heading != null, html = '<div class="me' + (dir ? ' dir' : '') + '" style="--h:' + (S.heading || 0) + 'deg"><i></i></div>';
+      var ic = L.divIcon({ className: '', html: html, iconSize: [26, 26], iconAnchor: [13, 13] });
+      if (!MAP.me) MAP.me = L.marker([S.pos.lat, S.pos.lng], { icon: ic, interactive: false, zIndexOffset: 2000 }).addTo(MAP.map);
+      else { MAP.me.setLatLng([S.pos.lat, S.pos.lng]); MAP.me.setIcon(ic); }
+    }
+    var lb = $('locBtn'); if (lb) lb.classList.add('on');
+    if (NAV.on) updateNav();
+    if (first) refreshAll();
+    clearTimeout(startGPS.t); startGPS.t = setTimeout(function () { if (S.panel === 'list' || S.panel === 'results') renderSheet(false); }, 4000);
+  }, function (e) { if (e.code === 1) toast('Activa el permiso de ubicación para ver talleres cerca de ti 📍', 4500); },
+  { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+}
+async function getPos(ms) {
+  if (S.pos) return S.pos;
+  startGPS();
+  var t0 = Date.now();
+  while (!S.pos && Date.now() - t0 < (ms || 8000)) await wait(250);
+  return S.pos;
+}
+
+/* ---------- búsqueda de talleres (OpenStreetMap) ---------- */
+var CATS = [
+  ['llantas', /llant|vulcani|neumat|\brin(es)?\b|tyre|tire/],
+  ['refa', /refacc|autopart|partes|\brefa\b|repuest/],
+  ['hoja', /hojalat|pintura|carrocer|body/],
+  ['susp', /suspens|frenos?|amortig|alinea|balanc/],
+  ['taller', /taller|mecanic|automotri|servicio/]
+];
+var STOP = /\b(talleres?|mecanic[oa]s?|mecanica|automotri(z|ces)|servicios?|refaccionarias?|refacciones|autopartes?|partes|llanteras?|llantas?|vulcanizadoras?|hojalaterias?|pintura|suspension(es)?|frenos?|alineacion|cerca|cercanos?|cercanas?|de|del|mi|me|a|al|la|el|los|las|en|por|aqui|alrededor|ubicacion|zona|para|autos?|carros?|coches?|y|o|buscar?|quiero|donde|hay|un|una|unos|unas|lugar(es)?|esta|este|cerquita)\b/g;
+function catOf(text) { var n = norm(text); for (var i = 0; i < CATS.length; i++) if (CATS[i][1].test(n)) return CATS[i][0]; return null; }
+function classify(kind, name, tags) {
+  var n = norm(name); tags = tags || {};
+  if (kind === 'tyres' || /llant|vulcani/.test(n)) return 'llantas';
+  if (kind === 'car_parts' || /refacc|autopart/.test(n)) return 'refa';
+  if (tags['service:vehicle:body_repair'] === 'yes' || tags['service:vehicle:painting'] === 'yes' || /hojalat|pintura|carrocer/.test(n)) return 'hoja';
+  if (/suspens|frenos|amortig|alinea/.test(n)) return 'susp';
+  return 'taller';
+}
+function cleanTel(t) { if (!t) return ''; var d = String(t).split(/[;,]/)[0].replace(/\D/g, ''); if (d.length === 12 && d.indexOf('52') === 0) d = d.slice(2); if (d.length === 13 && d.indexOf('521') === 0) d = d.slice(3); return d; }
+function mkPlace(o) {
+  var tipo = classify(o.kind, o.name, o.tags);
+  return { id: o.id, tipo: tipo, nombre: o.name || (TIPOS[tipo].label + ' (sin nombre)'), dir: o.dir || '', tel: cleanTel(o.tel), col: o.col || '', lat: o.lat, lng: o.lng, hours: o.hours || '', web: o.web || '' };
+}
+function addrJoin(a) { return a.filter(Boolean).join(', '); }
+async function fetchJSON(url, opts, ms) {
+  var ctl = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ctl) ctl.abort(); }, ms || 15000);
+  try { var r = await fetch(url, Object.assign({ signal: ctl && ctl.signal }, opts || {})); if (!r.ok) throw new Error('http ' + r.status); return await r.json(); }
+  finally { clearTimeout(tm); }
+}
+var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.osm.jp/api/interpreter'];
+var PHOTON = 'https://photon.komoot.io';
+/* Nominatim permite 1 petición por segundo: todas pasan por esta fila. */
+var nomQ = Promise.resolve(), nomBlockedUntil = 0;
+function nomFetch(path, ms) {
+  var run = nomQ.then(async function () {
+    if (Date.now() < nomBlockedUntil) throw new Error('nominatim en pausa');
+    try { return await fetchJSON('https://nominatim.openstreetmap.org/' + path, { headers: { 'Accept-Language': 'es' } }, ms || 10000); }
+    catch (e) { nomBlockedUntil = Date.now() + 60000; throw e; }
+  });
+  nomQ = run.catch(function () {}).then(function () { return wait(1200); });
+  return run;
+}
+function cacheGet(k) { var c = lsGet('tn.cache', {}), v = c[k]; return v && Date.now() - v.t < 864e5 ? v.d : null; }
+function cachePut(k, d) {
+  var c = lsGet('tn.cache', {}), ks = Object.keys(c);
+  if (ks.length > 60) ks.sort(function (a, b) { return c[a].t - c[b].t; }).slice(0, ks.length - 60).forEach(function (x) { delete c[x]; });
+  c[k] = { t: Date.now(), d: d }; try { lsSet('tn.cache', c); } catch (e) {}
+}
+async function overpass(c, r) {
+  var a = '(around:' + Math.round(r) + ',' + c.lat.toFixed(6) + ',' + c.lng.toFixed(6) + ')';
+  var q = '[out:json][timeout:20];(nwr["shop"~"^(car_repair|car_parts|tyres)$"]' + a + ';nwr["craft"="car_repair"]' + a + ';nwr["amenity"="car_repair"]' + a + ';);out center tags 150;';
+  var j = await new Promise(function (ok, ko) {
+    var left = OVERPASS.length;
+    OVERPASS.forEach(function (u) {
+      fetchJSON(u, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 12000)
+        .then(function (r) { if (r && r.elements) ok(r); else throw new Error('vacío'); })
+        .catch(function () { if (--left === 0) ko(new Error('overpass')); });
+    });
+  });
+  return (j.elements || []).map(function (e) {
+    var t = e.tags || {}, lat = e.lat != null ? e.lat : e.center && e.center.lat, lng = e.lon != null ? e.lon : e.center && e.center.lon;
+    if (lat == null) return null;
+    return mkPlace({ id: 'osm:' + e.type[0] + e.id, kind: t.shop || 'car_repair', name: t.name || t.brand || '', tags: t, lat: lat, lng: lng,
+      dir: addrJoin([addrJoin([t['addr:street'], t['addr:housenumber']]).replace(', ', ' '), t['addr:suburb'] || t['addr:neighbourhood']]), col: t['addr:suburb'] || t['addr:neighbourhood'] || '',
+      tel: t.phone || t['contact:phone'] || t['contact:mobile'] || t['contact:whatsapp'], hours: t.opening_hours, web: t.website || t['contact:website'] || t['contact:facebook'] });
+  }).filter(Boolean);
+}
+function nomPlace(x) {
+  var a = x.address || {}, t = x.extratags || {}, col = a.neighbourhood || a.suburb || a.quarter || '';
+  return mkPlace({ id: 'osm:' + (x.osm_type || 'n')[0] + x.osm_id, kind: x.type, name: x.name || t.brand || '', tags: t, lat: +x.lat, lng: +x.lon,
+    dir: addrJoin([addrJoin([a.road, a.house_number]).replace(', ', ' '), col, a.borough || a.city_district || a.city]), col: col,
+    tel: t.phone || t['contact:phone'], hours: t.opening_hours, web: t.website || t['contact:website'] });
+}
+var PH_OK = { car_repair: 1, car_parts: 1, tyres: 1 };
+function phAddr(pr) { return addrJoin([addrJoin([pr.street, pr.housenumber]).replace(', ', ' '), pr.district || pr.locality, pr.city]); }
+function phPlace(f) {
+  var pr = f.properties || {}, g = f.geometry.coordinates;
+  return mkPlace({ id: 'osm:' + (pr.osm_type || 'N').toLowerCase()[0] + pr.osm_id, kind: pr.osm_value, name: pr.name || '', tags: {}, lat: g[1], lng: g[0],
+    dir: phAddr(pr), col: pr.district || pr.locality || '' });
+}
+async function photonNear(c, r, cat) {
+  var dLat = r / 111320, dLng = r / (111320 * Math.cos(c.lat * Math.PI / 180));
+  var bb = [c.lng - dLng, c.lat - dLat, c.lng + dLng, c.lat + dLat].map(function (v) { return v.toFixed(5); }).join(',');
+  var words = cat === 'refa' ? ['refaccionaria', 'autopartes', 'refacciones'] : cat === 'llantas' ? ['llantera', 'vulcanizadora', 'llantas'] :
+    cat === 'hoja' ? ['hojalateria', 'pintura automotriz', 'taller'] : cat === 'susp' ? ['frenos', 'suspension', 'taller'] :
+    cat === 'taller' ? ['taller mecanico', 'automotriz', 'mecanico', 'taller', 'servicio automotriz', 'mecanica'] : ['taller mecanico', 'automotriz', 'mecanico', 'taller', 'refaccionaria', 'llantera', 'vulcanizadora', 'autopartes', 'servicio automotriz'];
+  var out = [], okAny = false;
+  for (var i = 0; i < words.length; i += 3) {
+    var got = await Promise.allSettled(words.slice(i, i + 3).map(function (w) {
+      return fetchJSON(PHOTON + '/api/?limit=50&lat=' + c.lat.toFixed(5) + '&lon=' + c.lng.toFixed(5) + '&bbox=' + bb + '&q=' + encodeURIComponent(w), null, 8000);
+    }));
+    got.forEach(function (g) {
+      if (g.status !== 'fulfilled') return; okAny = true;
+      (g.value.features || []).forEach(function (f) { var pr = f.properties || {}; if (PH_OK[pr.osm_value] && /^(shop|craft|amenity)$/.test(pr.osm_key)) out.push(phPlace(f)); });
+    });
+  }
+  if (!okAny) throw new Error('photon');
+  return out;
+}
+async function nominatimNear(c, r, cat) {
+  var dLat = r / 111320, dLng = r / (111320 * Math.cos(c.lat * Math.PI / 180)), vb = [c.lng - dLng, c.lat + dLat, c.lng + dLng, c.lat - dLat].map(function (v) { return v.toFixed(5); }).join(',');
+  var j = await nomFetch('search?format=jsonv2&limit=40&bounded=1&addressdetails=1&extratags=1&viewbox=' + vb + '&q=' + encodeURIComponent(cat === 'refa' ? 'car parts' : cat === 'llantas' ? 'tyres' : 'car repair'), 12000);
+  return j.filter(function (x) { return x.category === 'shop' || x.category === 'craft' || x.category === 'amenity'; }).map(nomPlace);
+}
+/* ---------- Google Places (opcional): si hay clave, recorre la zona por celdas para traer todos ---------- */
+var GKEY_DEFAULT = '';  /* opcional: pega aquí tu clave de Google (o ponla desde la app con el botón 🔑) */
+function gkey() { return lsGet('tn.gkey', '') || GKEY_DEFAULT; }
+var GFIELDS = 'places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.types,places.primaryType';
+async function gPost(path, body, fields) {
+  var ctl = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ctl) ctl.abort(); }, 12000);
+  try {
+    var r = await fetch('https://places.googleapis.com/v1/places:' + path, { method: 'POST', signal: ctl && ctl.signal,
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': gkey(), 'X-Goog-FieldMask': fields || GFIELDS }, body: JSON.stringify(body) });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) { var e = new Error((j.error && j.error.message) || ('http ' + r.status)); e.status = r.status; throw e; }
+    return j;
+  } finally { clearTimeout(tm); }
+}
+function gPlace(x) {
+  var t = x.types || [], addr = x.shortFormattedAddress || x.formattedAddress || '';
+  return mkPlace({ id: 'g:' + x.id, kind: t.indexOf('auto_parts_store') >= 0 ? 'car_parts' : 'car_repair', name: (x.displayName && x.displayName.text) || '', tags: {},
+    lat: x.location.latitude, lng: x.location.longitude, dir: addr, col: addr.split(',').slice(-2, -1)[0] ? addr.split(',').slice(-2, -1)[0].trim() : '' });
+}
+function gridCells(c, r, cr) {
+  var out = [], step = cr * 1.5, n = Math.ceil(r / step), kLat = 1 / 111320, kLng = 1 / (111320 * Math.cos(c.lat * Math.PI / 180));
+  for (var i = -n; i <= n; i++) for (var j = -n; j <= n; j++) {
+    var dx = j * step + (i % 2 ? step / 2 : 0), dy = i * step * .87;
+    if (Math.sqrt(dx * dx + dy * dy) <= r + cr * .5) out.push({ lat: c.lat + dy * kLat, lng: c.lng + dx * kLng, r: cr });
+  }
+  return out;
+}
+async function pool(tasks, n) {
+  var i = 0; async function worker() { while (i < tasks.length) { var t = tasks[i++]; await t(); } }
+  await Promise.all(Array.from({ length: Math.min(n, tasks.length) }, worker));
+}
+async function googleNear(c, r, cat, onProgress) {
+  var found = {}, calls = 0, MAX = 50, fatal = null;
+  function keep(list) { (list || []).forEach(function (x) { if (x.location) found[x.id] = x; }); if (onProgress) onProgress(Object.keys(found).length); }
+  var types = cat === 'refa' ? ['auto_parts_store'] : cat === 'llantas' ? null : cat ? ['car_repair'] : ['car_repair', 'auto_parts_store'];
+  async function nearby(cell, depth) {
+    if (calls >= MAX || fatal) return; calls++;
+    try {
+      var j = await gPost('searchNearby', { includedTypes: types, maxResultCount: 20, rankPreference: 'DISTANCE', languageCode: 'es', regionCode: 'MX',
+        locationRestriction: { circle: { center: { latitude: cell.lat, longitude: cell.lng }, radius: cell.r } } });
+      keep(j.places);
+      if (j.places && j.places.length >= 20 && depth < 2) await pool(gridCells(cell, cell.r, cell.r / 2.2).map(function (s) { return function () { return nearby(s, depth + 1); }; }), 4);
+    } catch (e) { if (e.status === 400 || e.status === 403) fatal = e; }
+  }
+  var dLat = r / 111320, dLng = r / (111320 * Math.cos(c.lat * Math.PI / 180));
+  var rect = { rectangle: { low: { latitude: c.lat - dLat, longitude: c.lng - dLng }, high: { latitude: c.lat + dLat, longitude: c.lng + dLng } } };
+  async function text(q) {
+    var token = '';
+    for (var pg = 0; pg < 3 && calls < MAX && !fatal; pg++) {
+      calls++;
+      try {
+        var b = { textQuery: q, pageSize: 20, languageCode: 'es', regionCode: 'MX', locationRestriction: rect }; if (token) b.pageToken = token;
+        var j = await gPost('searchText', b, GFIELDS + ',nextPageToken');
+        keep(j.places); token = j.nextPageToken; if (!token) break;
+      } catch (e) { if (e.status === 400 || e.status === 403) fatal = e; break; }
+    }
+  }
+  var words = cat === 'llantas' ? ['llantera', 'vulcanizadora'] : cat === 'refa' ? ['refaccionaria'] : cat === 'hoja' ? ['hojalatería y pintura'] : cat === 'susp' ? ['frenos y suspensión'] : cat === 'taller' ? ['taller mecánico'] : ['taller mecánico', 'llantera', 'refaccionaria'];
+  var jobs = words.map(function (w) { return function () { return text(w); }; });
+  if (types) jobs = jobs.concat(gridCells(c, r, Math.max(900, Math.min(2000, r / 3))).map(function (cell) { return function () { return nearby(cell, 0); }; }));
+  await pool(jobs, 4);
+  if (fatal && !Object.keys(found).length) throw fatal;
+  return Object.keys(found).map(function (k) { return gPlace(found[k]); });
+}
+/* Directorio abierto (Overture Maps) partido en cuadros de 0.1° dentro de data/ */
+var OV = { idx: null, tiles: {} }, OVTIPO = ['taller', 'refa', 'llantas', 'hoja', 'susp'];
+function ovIndex() {
+  if (!OV.idx) OV.idx = fetchJSON('data/index.json', null, 10000).then(function (j) { j.set = {}; j.t.forEach(function (k) { j.set[k] = 1; }); return j; }).catch(function (e) { OV.idx = null; throw e; });
+  return OV.idx;
+}
+async function ovNear(c, r) {
+  var ix; try { ix = await ovIndex(); } catch (e) { return null; }
+  var b = ix.b; if (c.lng < b[0] || c.lat < b[1] || c.lng > b[2] || c.lat > b[3]) return null;
+  var G = ix.g, dLat = r / 111320, dLng = r / (111320 * Math.cos(c.lat * Math.PI / 180)), keys = [];
+  for (var i = Math.floor((c.lat - dLat) / G); i <= Math.floor((c.lat + dLat) / G); i++)
+    for (var j = Math.floor((c.lng - dLng) / G); j <= Math.floor((c.lng + dLng) / G); j++) if (ix.set[i + '_' + j]) keys.push(i + '_' + j);
+  var got = await Promise.all(keys.map(function (k) {
+    return OV.tiles[k] || (OV.tiles[k] = fetchJSON('data/' + k + '.json', null, 15000).catch(function () { delete OV.tiles[k]; return []; }));
+  }));
+  var out = [];
+  got.forEach(function (arr) {
+    arr.forEach(function (x) {
+      if (haversine(c, { lat: x[0], lng: x[1] }) > r) return;
+      out.push({ id: 'ov:' + x[0] + ',' + x[1], tipo: OVTIPO[x[3]] || 'taller', nombre: x[2], dir: x[4], col: x[5], tel: cleanTel(x[6]), lat: x[0], lng: x[1], hours: '', web: '' });
+    });
+  });
+  return out;
+}
+/* API del DENUE (INEGI): gratis con token personal; se usa fuera de la zona que ya viene en data/ */
+var ITOKEN_DEFAULT = '970ec0d5-98b4-448e-8781-dfc1f3c70db8';
+function itoken() { return lsGet('tn.itoken', '') || (ITOKEN_DEFAULT.indexOf('/*') ? ITOKEN_DEFAULT : ''); }
+function itokenBuiltin() { return !!ITOKEN_DEFAULT && ITOKEN_DEFAULT.indexOf('/*') !== 0; }
+var ITITLE = { de: 1, del: 1, la: 1, las: 1, los: 1, y: 1, e: 1, en: 1, el: 1, a: 1, al: 1, con: 1, por: 1 };
+function titleCase(t) { return String(t || '').toLowerCase().split(/\s+/).filter(Boolean).map(function (w, i) { return i && ITITLE[w] ? w : w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
+function inegiTipo(clase) {
+  var n = norm(clase || '');
+  if (/lavado|al por menor de (automoviles|motocicletas)|al por mayor|blindaje|alquiler|renta/.test(n)) return null;
+  if (/llantas/.test(n)) return 'llantas';
+  if (/partes y refacciones/.test(n)) return 'refa';
+  if (/hojalateria|carroceria/.test(n)) return 'hoja';
+  if (/suspensiones|alineacion/.test(n)) return 'susp';
+  if (/(reparacion|rectificacion|tapiceria|mantenimiento).*(automoviles|camiones|motocicletas)/.test(n)) return 'taller';
+  return null;
+}
+async function inegiGet(word, cell) {
+  var ctl = window.AbortController ? new AbortController() : null, tm = setTimeout(function () { if (ctl) ctl.abort(); }, 20000);
+  try {
+    var r = await fetch('https://www.inegi.org.mx/app/api/denue/v1/consulta/Buscar/' + encodeURIComponent(word) + '/' + cell.lat.toFixed(6) + ',' + cell.lng.toFixed(6) + '/' + Math.round(Math.min(5000, cell.r)) + '/' + encodeURIComponent(itoken()), { signal: ctl && ctl.signal });
+    var t = await r.text();
+    if (/no autorizado/i.test(t)) { var e = new Error('token'); e.status = 403; throw e; }
+    if (!r.ok) throw new Error('http ' + r.status);
+    t = t.trim(); if (!t || t.charAt(0) !== '[') return [];
+    return JSON.parse(t);
+  } finally { clearTimeout(tm); }
+}
+async function inegiNear(c, r, onProgress) {
+  var found = {}, fatal = null, okAny = false;
+  var cells = r > 5000 ? gridCells(c, r, 5000) : [{ lat: c.lat, lng: c.lng, r: r }];
+  var jobs = [];
+  cells.forEach(function (cell) {
+    ['automóviles', 'llantas', 'motocicletas'].forEach(function (w) {
+      jobs.push(async function () {
+        if (fatal) return;
+        try {
+          (await inegiGet(w, cell)).forEach(function (x) {
+            var tipo = inegiTipo(x.Clase_actividad), lat = parseFloat(x.Latitud), lng = parseFloat(x.Longitud);
+            if (!tipo || !isFinite(lat) || !isFinite(lng) || haversine(c, { lat: lat, lng: lng }) > r) return;
+            var nm = String(x.Nombre || '').trim(); if (!nm || /sin nombre|^ninguno$/i.test(nm)) nm = TIPOS[tipo].label;
+            var calle = /^(ninguno|sin nombre)$/i.test(x.Calle || '') ? '' : titleCase(x.Calle), num = /^(0|sn|s\/n)$/i.test(x.Num_Exterior || '') ? '' : (x.Num_Exterior || '');
+            var mun = String(x.Ubicacion || '').split(',')[1] || '';
+            found[x.Id] = { id: 'in:' + x.Id, tipo: tipo, nombre: titleCase(nm), dir: (calle + (calle && num ? ' ' + num : '')).trim(), col: [titleCase(x.Colonia), mun.trim()].filter(Boolean).join(', '), tel: cleanTel(x.Telefono), lat: lat, lng: lng, hours: '', web: x.Sitio_internet || '' };
+          });
+          okAny = true;
+          if (onProgress) onProgress(Object.keys(found).length);
+        } catch (e) { if (e.status === 403) fatal = e; }
+      });
+    });
+  });
+  await pool(jobs, 3);
+  if (fatal) throw fatal;
+  if (!okAny) throw new Error('inegi sin respuesta');
+  return Object.keys(found).map(function (k) { return found[k]; });
+}
+async function fetchPlaces(c, r, cat) {
+  var key = (gkey() ? 'pg:' : 'p:') + c.lat.toFixed(3) + ',' + c.lng.toFixed(3) + ':' + Math.round(r / 100) + ':' + (cat || '');
+  var ov = await ovNear(c, r), list = null;
+  if (ov && ov.length >= 5) { list = ov; S.src = 'ov'; }
+  if (!list && itoken()) {
+    var ik = 'pi:' + c.lat.toFixed(3) + ',' + c.lng.toFixed(3) + ':' + Math.round(r / 100);
+    list = cacheGet(ik);
+    if (!list) {
+      try {
+        list = await inegiNear(c, r, function (k) { busy(true, 'INEGI: ' + k + ' lugares… sigo buscando'); });
+        if (list.length) cachePut(ik, list); else list = null;
+      } catch (e) {
+        list = null;
+        if (e.status === 403) toast((itokenBuiltin() && !lsGet('tn.itoken', '') ? 'El INEGI no respondió; muestro lo que hay en el mapa libre.' : '🔑 El INEGI no aceptó tu token. Revísalo en Progreso → Conectar INEGI.'), 6000);
+      }
+    }
+    if (list) { S.src = 'inegi'; if (ov) list = ov.concat(list); }
+  }
+  if (!list) list = cacheGet(key);
+  if (!list && gkey()) {
+    try {
+      list = await googleNear(c, r, cat, function (k) { busy(true, 'Encontré ' + k + ' lugares… sigo buscando'); });
+      S.src = 'google';
+    } catch (e) {
+      list = null;
+      if (e.status === 400 || e.status === 403) toast('🔑 Google rechazó la clave: ' + String(e.message).slice(0, 90) + '. Uso el mapa gratuito.', 6000);
+    }
+    if (list) cachePut(key, list);
+  }
+  if (!list) {
+    S.src = 'osm';
+    var got = await Promise.allSettled([overpass(c, r), photonNear(c, r, cat)]);
+    var okAny = got.some(function (g) { return g.status === 'fulfilled'; });
+    list = [].concat.apply([], got.map(function (g) { return g.status === 'fulfilled' ? g.value : []; }));
+    if (!list.length) { try { list = await nominatimNear(c, r, cat); okAny = true; } catch (e) {} }
+    if (!okAny) throw new Error('sin servicio');
+    if (list.length) cachePut(key, list);
+    if (ov) list = ov.concat(list);
+  }
+  var seen = {}, dup = {}, res = [];
+  list.forEach(function (p) {
+    if (seen[p.id]) return; seen[p.id] = 1;
+    var dk = norm(p.nombre).slice(0, 6) + '@' + Math.round(p.lat * 2500) + ',' + Math.round(p.lng * 2500);
+    if (dup[dk]) return; dup[dk] = 1;
+    if (cat && cat !== 'taller' && p.tipo !== cat) return;
+    if (cat === 'taller' && (p.tipo === 'refa')) return;
+    var known = P[p.id]; if (known && inList(known)) { res.push(known); return; }
+    if (FIXED.some(function (f) { var g = posOf(f); return g && haversine(g, p) < 60 && norm(f.nombre).slice(0, 6) === norm(p.nombre).slice(0, 6); })) return;
+    P[p.id] = p; res.push(p);
+  });
+  res.sort(function (a, b) { return haversine(c, posOf(a)) - haversine(c, posOf(b)); });
+  return res.slice(0, 1500);
+}
+var PLACES = [
+  ['alvaro obregon', 19.3590, -99.2030, 4000], ['azcapotzalco', 19.4870, -99.1840, 3000], ['benito juarez', 19.3727, -99.1567, 2500],
+  ['coyoacan', 19.3350, -99.1520, 4500], ['cuajimalpa', 19.3570, -99.2990, 4000], ['cuauhtemoc', 19.4330, -99.1500, 2500],
+  ['gustavo a madero', 19.4900, -99.1100, 5500], ['gam', 19.4900, -99.1100, 5500], ['iztacalco', 19.3960, -99.0970, 2500],
+  ['iztapalapa', 19.3550, -99.0600, 6500], ['magdalena contreras', 19.3130, -99.2400, 3000], ['miguel hidalgo', 19.4280, -99.2000, 3500],
+  ['milpa alta', 19.1920, -99.0230, 5000], ['tlahuac', 19.2750, -99.0050, 6000], ['tlalpan', 19.2850, -99.1700, 5000],
+  ['venustiano carranza', 19.4300, -99.1000, 3000], ['xochimilco', 19.2600, -99.1000, 5000],
+  ['nezahualcoyotl', 19.4000, -99.0150, 4500], ['neza', 19.4000, -99.0150, 4000], ['ecatepec', 19.6010, -99.0500, 6000],
+  ['naucalpan', 19.4750, -99.2380, 4000], ['tlalnepantla', 19.5400, -99.1950, 4000], ['chimalhuacan', 19.4210, -98.9510, 3000],
+  ['la paz', 19.3600, -98.9800, 3000], ['valle de chalco', 19.2900, -98.9400, 3000], ['chalco', 19.2640, -98.8970, 3500],
+  ['texcoco', 19.5110, -98.8820, 3500], ['polanco', 19.4330, -99.1910, 1800], ['centro historico', 19.4326, -99.1332, 1500],
+  ['roma', 19.4150, -99.1620, 1500], ['condesa', 19.4110, -99.1730, 1500], ['santa fe', 19.3600, -99.2600, 2500],
+  ['agricola oriental', 19.3980, -99.0720, 2000], ['zocalo', 19.4326, -99.1332, 1500], ['narvarte', 19.3920, -99.1550, 1500],
+  ['del valle', 19.3850, -99.1700, 1500], ['san angel', 19.3460, -99.1900, 1500], ['lindavista', 19.4880, -99.1300, 1800],
+  ['toluca', 19.2880, -99.6560, 5000], ['metepec', 19.2560, -99.6050, 3500], ['cuernavaca', 18.9220, -99.2340, 5000], ['puebla', 19.0430, -98.2000, 6000],
+  ['pachuca', 20.1000, -98.7600, 4500], ['cuautitlan izcalli', 19.6460, -99.2110, 4500], ['cuautitlan', 19.6700, -99.1790, 3000], ['tecamac', 19.7130, -98.9680, 4500],
+  ['coacalco', 19.6290, -99.1060, 3000], ['atizapan', 19.5600, -99.2600, 4000], ['huixquilucan', 19.3600, -99.3500, 4000], ['ixtapaluca', 19.3180, -98.8820, 4000],
+  ['tultitlan', 19.6450, -99.1690, 3500], ['nicolas romero', 19.6220, -99.3130, 3500], ['zumpango', 19.7970, -99.0990, 3500], ['tultepec', 19.6850, -99.1280, 3000],
+  ['los reyes', 19.3600, -98.9800, 3000], ['chicoloapan', 19.4170, -98.9020, 3000], ['acolman', 19.6370, -98.9120, 3500], ['ojo de agua', 19.6800, -99.0100, 3000],
+  ['monterrey', 25.6866, -100.3161, 5000], ['guadalajara', 20.6597, -103.3496, 5000], ['zapopan', 20.7214, -103.3918, 5000], ['queretaro', 20.5888, -100.3899, 5000],
+  ['leon', 21.1250, -101.6860, 5000], ['merida', 20.9674, -89.5926, 5000], ['tijuana', 32.5149, -117.0382, 5000], ['cancun', 21.1619, -86.8515, 5000],
+  ['aguascalientes', 21.8818, -102.2916, 5000], ['san luis potosi', 22.1565, -100.9855, 5000], ['morelia', 19.7060, -101.1950, 5000], ['veracruz', 19.1738, -96.1342, 5000],
+  ['oaxaca', 17.0732, -96.7266, 4000], ['chihuahua', 28.6353, -106.0889, 5000], ['hermosillo', 29.0729, -110.9559, 5000], ['saltillo', 25.4232, -101.0053, 5000],
+  ['culiacan', 24.8091, -107.3940, 5000], ['acapulco', 16.8531, -99.8237, 5000], ['tlaxcala', 19.3182, -98.2375, 3000], ['torreon', 25.5428, -103.4068, 5000],
+  ['mexicali', 32.6245, -115.4523, 5000], ['villahermosa', 17.9895, -92.9475, 5000], ['tuxtla', 16.7531, -93.1156, 5000], ['durango', 24.0277, -104.6532, 5000],
+  ['zacatecas', 22.7709, -102.5832, 4000], ['colima', 19.2433, -103.7250, 4000], ['tepic', 21.5042, -104.8946, 4000], ['campeche', 19.8301, -90.5349, 4000],
+  ['chetumal', 18.5001, -88.2961, 4000], ['la paz bcs', 24.1426, -110.3128, 4000], ['ciudad victoria', 23.7369, -99.1411, 4000], ['xalapa', 19.5438, -96.9102, 4000]
+];
+function builtinPlace(text) {
+  var n = ' ' + norm(text).replace(/[^a-z0-9 ]/g, ' ').replace(/\b(cdmx|mexico|ciudad de|alcaldia|delegacion|municipio|estado|colonia|col)\b/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  for (var i = 0; i < PLACES.length; i++) {
+    var x = PLACES[i];
+    if (n.indexOf(' ' + x[0] + ' ') >= 0) return { lat: x[1], lng: x[2], r: x[3], name: x[0].replace(/\b\w/g, function (c) { return c.toUpperCase(); }) };
+  }
+  return null;
+}
+async function geocodePlace(text) {
+  var bi = builtinPlace(text); if (bi) return bi;
+  var k = 'g:' + norm(text), hit = cacheGet(k); if (hit) return hit;
+  var c = MAP.map ? MAP.map.getCenter() : BASE, out = null;
+  try {
+    var j = await fetchJSON(PHOTON + '/api/?limit=5&lat=' + c.lat.toFixed(4) + '&lon=' + c.lng.toFixed(4) + '&q=' + encodeURIComponent(text.replace(/,? ?méxico$/i, '')), null, 8000);
+    var fs = (j.features || []).filter(function (f) { return f.properties.countrycode === 'MX' && /^(city|district|locality|county|state|street|other)$/.test(f.properties.type || 'other'); });
+    var f = fs.filter(function (f) { return f.properties.type !== 'street'; })[0] || fs[0];
+    if (f) {
+      var e = f.properties.extent, g = f.geometry.coordinates, diag = e ? haversine({ lat: e[1], lng: e[0] }, { lat: e[3], lng: e[2] }) : 2400;
+      out = { lat: g[1], lng: g[0], r: Math.max(1200, Math.min(5000, diag / 2)), name: f.properties.name || text };
+    }
+  } catch (e) {}
+  if (!out) {
+    var a = await nomFetch('search?format=jsonv2&limit=1&countrycodes=mx&viewbox=' + [c.lng - .4, c.lat + .4, c.lng + .4, c.lat - .4].join(',') + '&q=' + encodeURIComponent(text), 10000);
+    if (!a[0]) return null;
+    var bb = a[0].boundingbox.map(Number), dg = haversine({ lat: bb[0], lng: bb[2] }, { lat: bb[1], lng: bb[3] });
+    out = { lat: +a[0].lat, lng: +a[0].lon, r: Math.max(1200, Math.min(5000, dg / 2)), name: a[0].name || text };
+  }
+  cachePut(k, out);
+  return out;
+}
+function busy(on, label) {
+  $('radar').hidden = !on; $('radarL').hidden = !on; if (label) $('radarL').textContent = label;
+}
+async function searchAt(center, radius, cat, label, local) {
+  hideSuggest(); $('here').hidden = true;
+  S.res = { loading: true, label: label, items: [] }; S.sel = null;
+  openPanel('results', { reset: true, noPush: true, state: 'half' });
+  if (MAP.map) {
+    if (MAP.ctr) MAP.map.removeLayer(MAP.ctr);
+    MAP.ctr = L.marker([center.lat, center.lng], { icon: L.divIcon({ className: '', html: '<div class="ctr"></div>', iconSize: [120, 120], iconAnchor: [60, 60] }), interactive: false, zIndexOffset: -500 }).addTo(MAP.map);
+    flyTo(center, radius > 2500 ? 14 : 15);
+  }
+  busy(true, cat ? 'Buscando ' + PLURAL[cat].toLowerCase() + '…' : 'Buscando talleres…');
+  var items = [], err = false;
+  try {
+    items = await fetchPlaces(center, radius, cat);
+    if (items.length < 4 && radius < 5000 && S.src !== 'google') { radius = Math.min(5000, radius * 2.5); busy(true, 'Ampliando la búsqueda…'); items = await fetchPlaces(center, radius, cat); }
+  } catch (e) { err = true; }
+  busy(false);
+  S.res = { src: S.src, items: items, label: label, center: center, radius: radius, cat: cat, filter: 'all', error: err, local: local || [], zoom: MAP.map ? MAP.map.getZoom() : 0 };
+  syncMarkers(); renderSheet(true); renderTop();
+  if (items.length) {
+    buzz(15);
+    fitPoints(items.slice(0, 25).map(function (p) { var g = posOf(p); return [g.lat, g.lng]; }).concat([[center.lat, center.lng]]));
+    setTimeout(function () { if (S.res) S.res.zoom = MAP.map.getZoom(); }, 1600);
+  }
+}
+async function doSearch(text) {
+  text = (text || '').trim(); if (!text) return;
+  $('q').blur(); hideSuggest();
+  var n = norm(text), cat = catOf(text), place = n.replace(STOP, ' ').replace(/\s+/g, ' ').trim(), near = /cerca|aqui|alrededor|mi ubicacion|cerquita/.test(n);
+  var local = listItems().filter(function (p) { return norm(p.nombre + ' ' + p.col + ' ' + p.dir).indexOf(n) >= 0; });
+  if (local.length && !cat && !near && local.length <= 8) {
+    var c0 = MAP.map.getCenter();
+    try { var gp0 = place ? await geocodePlace(place) : null; if (gp0) return searchAt(gp0, gp0.r, null, 'En ' + gp0.name, local); } catch (e) {}
+    S.res = { items: [], label: '«' + text + '»', center: { lat: c0.lat, lng: c0.lng }, radius: 3000, filter: 'all', local: local };
+    openPanel('results', { reset: true, noPush: true }); syncMarkers();
+    if (local.length === 1) showDetail(local[0].id, false);
+    return;
+  }
+  if (place && !(near && place.length < 3)) {
+    busy(true, 'Buscando «' + place + '»…');
+    var gp = null; try { gp = await geocodePlace(place + (/(mexico|cdmx)/.test(place) ? '' : ', México')); } catch (e) {}
+    busy(false);
+    if (gp) return searchAt(gp, gp.r, cat, catLabel(cat) + ' en ' + gp.name, local);
+    toast('No encontré «' + place + '». Busco en esta zona del mapa.');
+  }
+  if (near || !place) {
+    if (near) {
+      busy(true, 'Buscando tu ubicación…');
+      var me = await getPos(8000); busy(false);
+      if (me) return searchAt(me, 1800, cat, catLabel(cat) + ' cerca de ti');
+      toast('Sin GPS todavía: busco en la zona que ves en el mapa 🗺️');
+    }
+  }
+  var c = MAP.map.getCenter();
+  searchAt({ lat: c.lat, lng: c.lng }, viewRadius(), cat, catLabel(cat) + ' en esta zona');
+}
+async function ensureAddress(p) {
+  if (p.dir || p.fixed || p._rev) return; p._rev = 1;
+  try {
+    var j = await fetchJSON(PHOTON + '/reverse?limit=1&lat=' + p.lat + '&lon=' + p.lng, null, 8000);
+    var pr = (j.features && j.features[0] && j.features[0].properties) || {}, col = pr.district || pr.locality || '';
+    p.dir = phAddr(pr) || 'Dirección no disponible';
+    p.col = p.col || col;
+    if (S.mine[p.id]) { S.mine[p.id].dir = p.dir; S.mine[p.id].col = p.col; lsSet('tn.mine', S.mine); }
+  } catch (e) { p.dir = 'Dirección no disponible'; }
+  if (S.panel === 'detail' && S.sel === p.id) renderSheet(false);
+}
+function showDetail(id, fromMap) {
+  var p = P[id]; if (!p || NAV.on) return;
+  var prev = S.sel;
+  if (S.panel === 'detail') { S.sel = id; renderSheet(true); setSheet('half'); }
+  else { S.sel = id; openPanel('detail', { state: 'half' }); }
+  if (prev && prev !== id) refreshMarker(prev);
+  refreshMarker(id); flyTo(posOf(p), fromMap ? null : 16); ensureAddress(p);
+}
+
+/* ---------- sugerencias mientras escribes ---------- */
+function showSuggest() {
+  var v = $('q').value.trim(), n = norm(v), h = '';
+  $('qclear').hidden = !v;
+  if (!v) {
+    h = '<button class="sg" data-act="sgo" data-q="talleres cerca de mí"><span class="e">📍</span><div><b>Talleres cerca de mí</b><small>Usa tu GPS</small></div></button>' +
+      '<button class="sg" data-act="searchhere"><span class="e">🗺️</span><div><b>Talleres en esta zona del mapa</b><small>Mueve el mapa a donde quieras</small></div></button>' +
+      '<button class="sg" data-act="sgo" data-q="refaccionarias cerca de mí"><span class="e">🔩</span><div><b>Refaccionarias cerca de mí</b></div></button>';
+  } else {
+    h = '<button class="sg" data-act="sgo" data-q="' + esc(v) + '"><span class="e">🔎</span><div><b>Buscar «' + esc(v) + '»</b><small>Talleres en ese lugar o cerca de ti</small></div></button>';
+    var loc = listItems().filter(function (p) { return norm(p.nombre + ' ' + p.col + ' ' + p.dir).indexOf(n) >= 0; }).slice(0, 5);
+    h += loc.map(function (p) { return '<button class="sg" data-act="sgdetail" data-id="' + esc(p.id) + '"><span class="e">' + T(p).emo + '</span><div><b>' + esc(p.nombre) + '</b><small>' + esc(p.col || p.dir) + (S.visited[p.id] ? ' · ✓ visitado' : '') + '</small></div></button>'; }).join('');
+  }
+  $('suggest').innerHTML = h; $('suggest').hidden = false; $('quick').hidden = true;
+}
+function hideSuggest() { $('suggest').hidden = true; $('quick').hidden = false; }
+
+/* ---------- navegación paso a paso ---------- */
+var NAV = { on: false, route: null, steps: [], coords: [], idx: 0, dest: null, off: 0, lastRe: 0, voice: true, spoken: {}, follow: true, layer: null, lock: null, arrived: false, busy: false };
+var SIDE = { 'left': 'a la izquierda', 'right': 'a la derecha', 'slight left': 'ligeramente a la izquierda', 'slight right': 'ligeramente a la derecha', 'sharp left': 'cerrado a la izquierda', 'sharp right': 'cerrado a la derecha', 'straight': 'recto' };
+var ICON = { 'left': '↰', 'right': '↱', 'slight left': '↖', 'slight right': '↗', 'sharp left': '↰', 'sharp right': '↱', 'straight': '↑', 'uturn': '↶' };
+function stepText(s) {
+  var m = s.maneuver || {}, t = m.type, mod = m.modifier || '', side = SIDE[mod] || '', n = s.name ? ' por ' + s.name : '';
+  if (t === 'arrive') return 'Llegaste a tu destino';
+  if (t === 'depart') return s.name ? 'Sal por ' + s.name : 'Avanza';
+  if (mod === 'uturn') return 'Da vuelta en U' + n;
+  if (/roundabout|rotary/.test(t || '')) return 'En la glorieta toma la salida ' + (m.exit || '') + n;
+  if (t === 'merge') return 'Incorpórate ' + side + n;
+  if (t === 'on ramp') return 'Toma la rampa ' + side + n;
+  if (t === 'off ramp') return 'Toma la salida ' + side + n;
+  if (t === 'fork') return 'Mantente ' + side + n;
+  if (t === 'end of road') return 'Al final de la calle gira ' + side + n;
+  if (t === 'new name' || t === 'continue' || mod === 'straight' || !side) return 'Continúa' + (mod === 'straight' ? ' recto' : '') + n;
+  return 'Gira ' + side + n;
+}
+function stepIcon(s) { var m = s.maneuver || {}; if (m.type === 'arrive') return '🏁'; if (/roundabout|rotary/.test(m.type || '')) return '⟳'; return ICON[m.modifier] || '↑'; }
+function locOf(s) { return { lat: s.maneuver.location[1], lng: s.maneuver.location[0] }; }
+function distToRoute(pos, coords) {
+  var kx = Math.cos(pos.lat * Math.PI / 180) * 111320, ky = 110540, best = 1e9;
+  for (var i = 0; i < coords.length - 1; i++) {
+    var ax = (coords[i][0] - pos.lng) * kx, ay = (coords[i][1] - pos.lat) * ky, bx = (coords[i + 1][0] - pos.lng) * kx, by = (coords[i + 1][1] - pos.lat) * ky;
+    var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, u = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+    var px = ax + u * dx, py = ay + u * dy, d = Math.sqrt(px * px + py * py); if (d < best) best = d;
+  }
+  return best;
+}
+function speak(txt) {
+  if (!NAV.voice || !('speechSynthesis' in window)) return;
+  try { var u = new SpeechSynthesisUtterance(txt); u.lang = 'es-MX'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) {}
+}
+function navUI(on) {
+  document.body.classList.toggle('navon', on);
+  $('navTop').hidden = $('navBot').hidden = $('speed').hidden = !on; $('recenter').hidden = true;
+  if (on) { setSheet('closed'); hideSuggest(); $('here').hidden = true; }
+}
+async function startNav(id) {
+  var p = P[id], g = posOf(p);
+  if (!g) { toast('Todavía ubicando este taller. Intenta en unos segundos.'); return; }
+  if (NAV.on) stopNav(true);
+  NAV.on = true; NAV.dest = { id: id, lat: g.lat, lng: g.lng, nombre: p.nombre }; NAV.follow = true; NAV.arrived = false; NAV.off = 0; NAV.lastRe = 0; NAV.spoken = {};
+  navUI(true);
+  $('navDist').textContent = 'Calculando ruta…'; $('navText').textContent = p.nombre; $('navIco').textContent = '↑'; $('navSum').textContent = ''; $('navEta').textContent = '--:--';
+  if (!S.pos) { startGPS(); toast('Esperando GPS. Te muestro la ruta desde Nissan Iztacalco.'); }
+  speak('Vámonos a ' + p.nombre);
+  try { if (navigator.wakeLock) NAV.lock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  await fetchRoute(S.pos || BASE, false);
+}
+async function fetchRoute(from, quiet) {
+  if (NAV.busy) return; NAV.busy = true;
+  var d = NAV.dest;
+  try {
+    var j = await fetchJSON('https://router.project-osrm.org/route/v1/driving/' + from.lng + ',' + from.lat + ';' + d.lng + ',' + d.lat + '?overview=full&geometries=geojson&steps=true', null, 15000);
+    if (!j.routes || !j.routes[0]) throw new Error('sin ruta');
+    var rt = j.routes[0];
+    if (!NAV.on) return;
+    NAV.route = rt; NAV.steps = rt.legs[0].steps; NAV.coords = rt.geometry.coordinates; NAV.idx = 0; NAV.spoken = {};
+    if (NAV.layer) MAP.map.removeLayer(NAV.layer);
+    NAV.layer = L.layerGroup([
+      L.geoJSON(rt.geometry, { style: { color: '#0a7fb0', weight: 13, opacity: .9 } }),
+      L.geoJSON(rt.geometry, { style: { color: '#33ccff', weight: 8, opacity: 1 } })
+    ]).addTo(MAP.map);
+    if (!S.pos) progMove(function () { MAP.map.fitBounds(L.geoJSON(rt.geometry).getBounds(), { paddingTopLeft: [30, 140], paddingBottomRight: [30, 200] }); });
+    updateNav();
+  } catch (e) {
+    if (!quiet) { $('navDist').textContent = 'Sin ruta'; $('navText').textContent = 'No se pudo calcular. Revisa tu conexión e intenta de nuevo.'; }
+  } finally { NAV.busy = false; }
+}
+function setEta(secs, dist) {
+  var t = new Date(Date.now() + secs * 1000);
+  $('navEta').textContent = 'Llegas ' + t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  $('navSum').textContent = fmtMin(secs) + ' · ' + fmtDist(dist);
+}
+function updateNav() {
+  if (!NAV.on) return;
+  $('spd').textContent = S.speed != null && S.speed >= 0 ? Math.round(S.speed * 3.6) : 0;
+  if (!NAV.steps.length) return;
+  var steps = NAV.steps, pos = S.pos, rt = NAV.route, last = steps.length - 1;
+  if (!pos) {
+    $('navDist').textContent = (rt.distance / 1000).toFixed(1) + ' km'; $('navText').textContent = 'Esperando GPS · ' + NAV.dest.nombre;
+    setEta(rt.duration, rt.distance); return;
+  }
+  if (haversine(pos, NAV.dest) < 35 && !NAV.arrived) { NAV.arrived = true; $('navIco').textContent = '🏁'; $('navDist').textContent = '¡Llegaste!'; $('navText').textContent = NAV.dest.nombre; speak('Llegaste a tu destino'); arrivedModal(); return; }
+  if (NAV.arrived) return;
+  while (NAV.idx < last - 1 && haversine(pos, locOf(steps[NAV.idx + 1])) < 25) NAV.idx++;
+  var up = steps[Math.min(NAV.idx + 1, last)], dNext = haversine(pos, locOf(up)), text = stepText(up);
+  var remain = dNext; for (var k = NAV.idx + 1; k <= last; k++) remain += steps[k].distance;
+  var secs = remain * (rt.duration / Math.max(1, rt.distance));
+  $('navIco').textContent = stepIcon(up); $('navDist').textContent = fmtDist(dNext); $('navText').textContent = text;
+  setEta(secs, remain);
+  var kf = NAV.idx + ':far', kn = NAV.idx + ':near';
+  if (dNext <= 130 && !NAV.spoken[kn]) { NAV.spoken[kn] = 1; NAV.spoken[kf] = 1; speak(text); }
+  else if (dNext <= 450 && dNext > 130 && !NAV.spoken[kf]) { NAV.spoken[kf] = 1; speak('En ' + (Math.round(dNext / 50) * 50) + ' metros, ' + text.charAt(0).toLowerCase() + text.slice(1)); }
+  if (NAV.follow) progMove(function () { MAP.map.setView([pos.lat, pos.lng], Math.max(MAP.map.getZoom(), 17), { animate: true }); });
+  if (distToRoute(pos, NAV.coords) > 70) {
+    NAV.off++;
+    if (NAV.off >= 2 && Date.now() - NAV.lastRe > 12000) { NAV.lastRe = Date.now(); NAV.off = 0; toast('🔄 Recalculando ruta…'); speak('Recalculando'); fetchRoute(pos, true); }
+  } else NAV.off = 0;
+}
+function stopNav(silent) {
+  var id = NAV.dest && NAV.dest.id;
+  NAV.on = false; NAV.steps = []; NAV.coords = []; NAV.route = null; NAV.arrived = false;
+  if (NAV.layer && MAP.map) { MAP.map.removeLayer(NAV.layer); NAV.layer = null; }
+  try { if (NAV.lock) { NAV.lock.release(); NAV.lock = null; } } catch (e) {}
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  navUI(false);
+  if (!silent && id != null) showDetail(id, false);
+}
+function arrivedModal() {
+  var p = P[NAV.dest.id]; if (!p) return;
+  var m = $('modal');
+  m.innerHTML = '<div class="mbox"><span class="e">🎉</span><h3>¡Llegaste!</h3><p>' + esc(p.nombre) + '</p>' +
+    (S.visited[p.id] ? '' : '<button class="btn pri press" data-act="arrivedok" data-id="' + esc(p.id) + '">✅ Marcar como visitado</button>') +
+    '<button class="btn press" data-act="modalclose">Cerrar</button></div>';
+  m.hidden = false;
+}
+
+/* ---------- arrastre del panel ---------- */
+(function () {
+  var sh = $('sheet'), y0 = null, dy = 0, moved = false;
+  function down(e) { if (e.target.closest('button,a,input,textarea')) return; y0 = e.clientY; dy = 0; moved = false; sh.classList.add('drag'); }
+  function move(e) { if (y0 == null) return; dy = e.clientY - y0; if (Math.abs(dy) > 6) moved = true; if (dy > 0) sh.style.transform = 'translateY(' + dy + 'px)'; }
+  function up() {
+    if (y0 == null) return; y0 = null; sh.classList.remove('drag'); sh.style.transform = '';
+    if (!moved) return;
+    if (dy > 90) setSheet(S.sheet === 'full' ? 'half' : S.sheet === 'half' ? 'min' : 'closed');
+    else if (dy < -50) setSheet(S.sheet === 'min' ? 'half' : 'full');
+    if (S.sheet === 'closed') closePanel();
+  }
+  ['grab', 'shHead'].forEach(function (id) { $(id).addEventListener('pointerdown', down); });
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  $('grab').addEventListener('click', function () { setSheet(S.sheet === 'min' ? 'half' : S.sheet === 'half' ? 'full' : 'half'); });
+})();
+
+/* ---------- eventos ---------- */
+function nearestPending() {
+  var from = S.pos || BASE, best = null, bd = 1e12;
+  listItems().forEach(function (p) { if (S.visited[p.id]) return; var g = posOf(p); if (!g) return; var d = haversine(from, g); if (d < bd) { bd = d; best = p; } });
+  return best;
+}
+document.addEventListener('click', function (e) {
+  var el = e.target.closest('[data-act]'); if (!el) return;
+  var act = el.dataset.act, id = el.dataset.id;
+  if (act === 'detail') showDetail(id, false);
+  else if (act === 'add') { e.stopPropagation(); addMine(P[id]); }
+  else if (act === 'remove') removeMine(id);
+  else if (act === 'toggle') toggleVisited(id);
+  else if (act === 'fav') toggleFav(id);
+  else if (act === 'nav') startNav(id);
+  else if (act === 'stopnav') stopNav(false);
+  else if (act === 'back') goBack();
+  else if (act === 'close') closePanel();
+  else if (act === 'togglesheet') setSheet(S.sheet === 'min' ? 'half' : S.sheet === 'half' ? 'full' : 'half');
+  else if (act === 'panel') { if (S.panel === el.dataset.p && S.sheet !== 'closed') closePanel(); else { S.armed = null; openPanel(el.dataset.p, { reset: true, noPush: true }); } }
+  else if (act === 'explore') { closePanel(); hideSuggest(); }
+  else if (act === 'nearme') doSearch('talleres cerca de mí');
+  else if (act === 'searchhere') { var c = MAP.map.getCenter(); searchAt({ lat: c.lat, lng: c.lng }, viewRadius(), S.res && S.res.cat, catLabel(S.res && S.res.cat) + ' en esta zona'); }
+  else if (act === 'quick') {
+    var x = QUICK[+el.dataset.i];
+    if (x.fav) { S.list.seg = 'fav'; openPanel('list', { reset: true, noPush: true }); }
+    else if (x.q) doSearch(x.q);
+    else doSearch(PLURAL[x.cat] + ' cerca de mí');
+  }
+  else if (act === 'sgo') { $('q').value = el.dataset.q; doSearch(el.dataset.q); }
+  else if (act === 'sgdetail') { hideSuggest(); $('q').blur(); showDetail(id, false); }
+  else if (act === 'clearq') { $('q').value = ''; $('qclear').hidden = true; $('q').focus(); showSuggest(); }
+  else if (act === 'itoken') {
+    var cu = itoken(), tv = window.prompt(cu ? 'Tu token del INEGI está guardado. Pega uno nuevo, o deja vacío y acepta para quitarlo:' : 'Pega tu token del INEGI (lo recibes gratis en tu correo al registrarte en la API del DENUE):', '');
+    if (tv === null) return; tv = tv.trim();
+    if (tv && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tv)) { toast('Ese token no parece válido. Se ve así: 1a2b3c4d-1234-…', 4000); return; }
+    lsSet('tn.itoken', tv); lsSet('tn.cache', {});
+    toast(tv ? '🔑 Token guardado. Ahora busco en el INEGI.' : 'Token quitado.', 3500);
+    if (S.res && S.res.center) searchAt(S.res.center, S.res.radius, S.res.cat, S.res.label); else renderSheet(false);
+  }
+  else if (act === 'gkey') {
+    var cur = gkey(), v = window.prompt(cur ? 'Tu clave de Google está guardada. Pega una nueva, o deja vacío y acepta para quitarla:' : 'Pega tu clave de Google (empieza con AIza…):', '');
+    if (v === null) return; v = v.trim();
+    if (v && !/^AIza[\w-]{20,}$/.test(v)) { toast('Esa clave no parece válida. Debe empezar con AIza…', 4000); return; }
+    lsSet('tn.gkey', v); lsSet('tn.cache', {});
+    toast(v ? '🔑 Clave guardada. Ahora busco con Google.' : 'Clave quitada. Uso el mapa gratuito.', 3500);
+    if (S.res && S.res.center) searchAt(S.res.center, S.res.radius, S.res.cat, S.res.label); else renderSheet(false);
+  }
+  else if (act === 'rfilter') { S.res.filter = el.dataset.v; renderSheet(false); }
+  else if (act === 'addall') { var k = 0; S.res.items.forEach(function (p) { if ((S.res.filter === 'all' || p.tipo === S.res.filter) && !inList(p)) { var g = posOf(p); S.mine[p.id] = { id: p.id, tipo: p.tipo, nombre: p.nombre, dir: p.dir, tel: p.tel, col: p.col, lat: g.lat, lng: g.lng, hours: p.hours, web: p.web, added: new Date().toISOString() }; P[p.id] = S.mine[p.id]; k++; } }); lsSet('tn.mine', S.mine); confetti(); toast('🎉 ' + k + ' talleres agregados a tu lista'); refreshAll(); }
+  else if (act === 'seg') { S.list.seg = el.dataset.v; renderSheet(false); }
+  else if (act === 'ltipo') { S.list.tipo = el.dataset.v; renderSheet(false); }
+  else if (act === 'fitlist') { setSheet('min'); fitPoints(listItems().map(posOf).filter(Boolean).map(function (g) { return [g.lat, g.lng]; })); }
+  else if (act === 'nextone') { var p = nearestPending(); if (!p) toast('🏆 ¡No te quedan talleres pendientes!'); else { toast('🎯 Tu próximo: ' + p.nombre); showDetail(p.id, false); } }
+  else if (act === 'reset') {
+    var v = el.dataset.v;
+    if (S.armed !== v) { S.armed = v; renderSheet(false); setTimeout(function () { if (S.armed === v) { S.armed = null; if (S.panel === 'prog') renderSheet(false); } }, 4000); return; }
+    S.armed = null;
+    if (v === 'visits') { S.visited = {}; lsSet('tn.visited', S.visited); toast('Visitas borradas'); }
+    else { Object.keys(S.mine).forEach(function (k2) { delete S.visited[k2]; delete S.fav[k2]; delete S.notes[k2]; }); S.mine = {}; ['mine', 'visited', 'fav', 'notes'].forEach(function (k3) { lsSet('tn.' + k3, S[k3]); }); toast('Talleres agregados quitados'); }
+    refreshAll();
+  }
+  else if (act === 'mute') { NAV.voice = !NAV.voice; $('muteBtn').textContent = NAV.voice ? '🔊' : '🔇'; if (!NAV.voice) { try { window.speechSynthesis.cancel(); } catch (x2) {} } }
+  else if (act === 'recenter') { NAV.follow = true; el.hidden = true; updateNav(); }
+  else if (act === 'locate') { if (S.pos) flyTo(S.pos, 16); else { startGPS(); toast('📍 Buscando tu ubicación…'); getPos(10000).then(function (p2) { if (p2) flyTo(p2, 16); }); } }
+  else if (act === 'base') flyTo(BASE, 16);
+  else if (act === 'arrivedok') { $('modal').hidden = true; if (!S.visited[id]) toggleVisited(id); stopNav(false); }
+  else if (act === 'modalclose') $('modal').hidden = true;
+  else if (act === 'toast') toast(el.dataset.msg);
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('rc')) e.target.click(); });
+document.addEventListener('input', function (e) {
+  if (e.target.id === 'lfind') { S.list.q = e.target.value; renderSheet(false); }
+  else if (e.target.id === 'note') { S.notes[e.target.dataset.id] = e.target.value; if (!e.target.value) delete S.notes[e.target.dataset.id]; lsSet('tn.notes', S.notes); }
+});
+$('sform').addEventListener('submit', function (e) { e.preventDefault(); doSearch($('q').value); });
+$('q').addEventListener('input', showSuggest);
+$('q').addEventListener('focus', showSuggest);
+$('suggest').addEventListener('mousedown', function (e) { e.preventDefault(); });
+$('q').addEventListener('blur', function () { setTimeout(hideSuggest, 200); });
+
+/* ---------- arranque ---------- */
+renderQuick(); renderTop();
+if (!initMap()) {
+  toast('No se pudo cargar el mapa. Te muestro tu lista.', 4000);
+  openPanel('list', { state: 'full' });
+} else {
+  startGPS();
+  if (!lsGet('tn.hello', 0)) { lsSet('tn.hello', 1); setTimeout(function () { toast('👋 Escribe «talleres cerca de mí» o toca 🔧 para descubrir talleres nuevos', 5000); }, 900); }
+}
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
+})();
+
+</script>
+<script>
+/* ---------- DOMI: Supabase, rutas, visitas y voz. Solo HTML/JS estático. ---------- */
+(function(){
+'use strict';
+var me=null, routeStops=[], currentPlace=null, recognition=null, listening=false;
+var $d=function(id){return document.getElementById(id)};
+var cfg=window.DOMI_SUPABASE_CONFIG||{};
+var sb=null;
+if(window.supabase&&cfg.url&&cfg.anonKey&&!/TU_URL|TU_ANON_KEY/.test(cfg.url+cfg.anonKey)){
+  sb=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+}
+function say(t){try{if(!window.speechSynthesis)return;window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang='es-MX';u.rate=1;window.speechSynthesis.speak(u);}catch(e){}}
+function errText(e){return (e&&e.message)||'No se pudo completar la operación.';}
+function requireClient(){if(!sb)throw new Error('Falta configurar Supabase. Abre LEEME_SUPABASE.txt y completa supabase-config.js.');}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function escHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toastMsg(t){if(typeof toast==='function')toast(t,3500);else alert(t);}
+async function roleFor(user){var r=await sb.from('domi_profiles').select('role,display_name').eq('id',user.id).single();if(r.error)throw r.error;return {id:user.id,email:user.email,role:r.data.role,display_name:r.data.display_name||user.email};}
+function unlock(user){me=user;document.body.classList.remove('auth-locked');$d('domiAuth').hidden=true;$d('domiTools').hidden=false;$d('domiAdminOpen').hidden=user.role!=='ADMIN';apiRoute().then(drawRoute).catch(function(){});}
+$d('domiLogin').addEventListener('submit',async function(e){e.preventDefault();$d('domiError').textContent='';try{requireClient();var a=await sb.auth.signInWithPassword({email:$d('domiUser').value.trim(),password:$d('domiPass').value});if(a.error)throw a.error;var user=await roleFor(a.data.user);unlock(user);say('Hola. Soy DOMI. ¿A dónde vamos hoy?');}catch(ex){$d('domiError').textContent=errText(ex);}});
+async function restore(){if(!sb){$d('domiError').textContent='DOMI necesita configurar Supabase para activar el acceso privado. Consulta LEEME_SUPABASE.txt.';return;}try{var x=await sb.auth.getSession();if(x.data.session){var user=await roleFor(x.data.session.user);unlock(user);}}catch(e){$d('domiError').textContent='No se pudo validar la cuenta. Revisa la configuración de Supabase.';}}
+restore();
+$d('domiLogout').addEventListener('click',async function(){if(sb)await sb.auth.signOut();me=null;location.reload();});
+async function apiRoute(){requireClient();if(!me)throw new Error('Inicia sesión para consultar tu ruta.');var r=await sb.from('domi_route_stops').select('*').eq('driver_id',me.id).eq('route_date',today()).order('created_at',{ascending:true});if(r.error)throw r.error;return {date:today(),stops:r.data||[]};}
+async function addStop(p){requireClient();if(!me)throw new Error('Inicia sesión primero.');var row={driver_id:me.id,route_date:today(),place_id:String(p.place_id),name:p.name||'Taller',address:p.address||'',lat:Number.isFinite(p.lat)?p.lat:null,lng:Number.isFinite(p.lng)?p.lng:null,phone:p.phone||'',visited:false};var r=await sb.from('domi_route_stops').upsert(row,{onConflict:'driver_id,route_date,place_id'}).select().single();if(r.error)throw r.error;return apiRoute();}
+function drawRoute(j){routeStops=j.stops||[];$d('routeDate').textContent='Ruta del '+new Date(j.date+'T12:00:00').toLocaleDateString('es-MX')+' · '+routeStops.length+' paradas';var el=$d('routeStops');if(!routeStops.length){el.innerHTML='<p class="domi-muted">Todavía no agregas talleres. Busca uno, abre su ficha y toca «Agregar a mi ruta».</p>';return;}el.innerHTML=routeStops.map(function(s,i){return '<div class="domi-stop"><span>'+(i+1)+'.</span><div class="stopinfo"><b>'+escHtml(s.name)+'</b><small class="domi-muted">'+escHtml(s.address||'Dirección no disponible')+'</small><br><small class="domi-muted">'+(s.visited?'✓ Visitado':'Pendiente')+'</small></div><button data-rnav="'+i+'" aria-label="Navegar">🚗</button><button data-rvisit="'+i+'" aria-label="Registrar visita">✓</button><button data-rremove="'+i+'" aria-label="Quitar">✕</button></div>';}).join('');}
+function openRoute(){ $d('domiRoute').hidden=false;apiRoute().then(drawRoute).catch(function(e){$d('routeStops').textContent=errText(e);}); }
+$d('domiRouteOpen').addEventListener('click',openRoute);document.addEventListener('click',function(e){if(e.target.closest('[data-act="domirouteopen"]'))openRoute();});$d('routeClose').addEventListener('click',function(){$d('domiRoute').hidden=true;});
+document.addEventListener('click',async function(e){var n=e.target.closest('[data-rnav],[data-rvisit],[data-rremove]');if(!n)return;var i=+(n.dataset.rnav||n.dataset.rvisit||n.dataset.rremove),s=routeStops[i];if(!s)return;if(n.hasAttribute('data-rnav')){if(s.lat!=null&&s.lng!=null)location.href='https://waze.com/ul?ll='+s.lat+','+s.lng+'&navigate=yes';else location.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(s.name+' '+(s.address||''));}else if(n.hasAttribute('data-rvisit')){openVisit(s);}else{var r=await sb.from('domi_route_stops').delete().eq('id',s.id).eq('driver_id',me.id);if(r.error)alert(errText(r.error));else apiRoute().then(drawRoute);}});
+function openVisit(s){currentPlace=s;$d('visitPlace').textContent=s.name;$d('visitPlaceId').value=s.place_id;$d('visitContact').value='';$d('visitAttended').value='';$d('visitInterested').value='pendiente';$d('visitNotes').value='';$d('visitModal').hidden=false;}
+$d('visitCancel').addEventListener('click',function(){$d('visitModal').hidden=true;});
+$d('visitForm').addEventListener('submit',async function(e){e.preventDefault();try{var row={driver_id:me.id,place_id:$d('visitPlaceId').value,place_name:currentPlace&&currentPlace.name||'',contact:$d('visitContact').value.trim(),attended_by:$d('visitAttended').value.trim(),interested:$d('visitInterested').value,notes:$d('visitNotes').value.trim()};var r=await sb.from('domi_visits').insert(row);if(r.error)throw r.error;await sb.from('domi_route_stops').update({visited:true}).eq('driver_id',me.id).eq('route_date',today()).eq('place_id',row.place_id);$d('visitModal').hidden=true;say('Visita guardada. Gracias.');drawRoute(await apiRoute());}catch(ex){alert(errText(ex));}});
+$d('routeNext').addEventListener('click',function(){var s=routeStops.find(function(x){return !x.visited;});if(!s){say('No tienes paradas pendientes en tu ruta.');return;}if(s.lat!=null&&s.lng!=null)location.href='https://waze.com/ul?ll='+s.lat+','+s.lng+'&navigate=yes';else location.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(s.name+' '+(s.address||''));});
+$d('domiAdminOpen').addEventListener('click',function(){if(!me||me.role!=='ADMIN'){alert('Acceso exclusivo para ADMIN.');return;}$d('adminModal').hidden=false;loadAdmin();});$d('adminClose').addEventListener('click',function(){$d('adminModal').hidden=true;});
+async function loadAdmin(){try{if(!me||me.role!=='ADMIN')throw new Error('Acceso exclusivo para ADMIN.');var r=await sb.from('domi_visits').select('id,place_name,created_at,driver_id,contact,attended_by,interested,notes,domi_profiles!domi_visits_driver_id_fkey(email,display_name)').order('created_at',{ascending:false}).limit(500);if(r.error)throw r.error;$d('adminVisits').innerHTML=r.data.length?'<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Taller / fecha</th><th>Chofer</th><th>Contacto</th><th>Atendió</th><th>Interés</th><th>Notas</th></tr></thead><tbody>'+r.data.map(function(v){var driver=v.domi_profiles&&(v.domi_profiles.display_name||v.domi_profiles.email)||v.driver_id;return '<tr>'+[v.place_name+' · '+new Date(v.created_at).toLocaleString('es-MX'),driver,v.contact,v.attended_by,v.interested,v.notes].map(function(x){return '<td style="padding:8px;border-bottom:1px solid #e3eaf2">'+escHtml(x)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>':'Todavía no hay visitas registradas.';}catch(e){$d('adminVisits').textContent=errText(e);}}
+/* Añadir taller a la ruta diaria desde la ficha existente. */
+document.addEventListener('click',async function(e){var b=e.target.closest('[data-act="domiroute"]');if(!b)return;try{var lat=b.dataset.lat===''?null:Number(b.dataset.lat),lng=b.dataset.lng===''?null:Number(b.dataset.lng);var j=await addStop({place_id:b.dataset.id,name:b.dataset.name,address:b.dataset.address,lat:lat,lng:lng,phone:b.dataset.phone});drawRoute(j);b.textContent='✓ Agregado a mi ruta de hoy';say('Agregado a tu ruta de hoy: '+b.dataset.name);}catch(ex){alert(errText(ex));}});
+function command(text){var t=text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');if(t.includes('ruta')&&(t.includes('mi')||t.includes('hoy')||t.includes('ver'))){openRoute();say('Aquí está tu ruta de hoy.');return;}if(t.includes('taller')&&(t.includes('cerca')||t.includes('ubicacion')||t.includes('mi'))){var q=document.getElementById('q');if(q){q.value='talleres cerca de mí';q.dispatchEvent(new Event('input',{bubbles:true}));var f=document.getElementById('sform');if(f)f.requestSubmit();}say('Buscando talleres cerca de tu ubicación.');return;}var areas=['coyoacan','tlahuac','iztapalapa','iztacalco','benito juarez','miguel hidalgo','gustavo a madero','xochimilco','tlalpan','venustiano carranza','cuauhtemoc','azcapotzalco','milpa alta','magdalena contreras'];var area=areas.find(function(a){return t.includes(a);});if(area){var q2=document.getElementById('q');if(q2){q2.value='talleres en '+area;var f2=document.getElementById('sform');if(f2)f2.requestSubmit();}say('Buscando talleres en '+area+'.');return;}if(t.includes('mas cercano')||t.includes('vamos al taller')){var qn=document.getElementById('q');if(qn){qn.value='talleres cerca de mí';var fn=document.getElementById('sform');if(fn)fn.requestSubmit();say('Buscando el taller más cercano. Preparando la ruta.');setTimeout(function(){var first=document.querySelector('#shBody [data-act="detail"]');if(!first){say('No encontré un taller cercano. Intenta buscar otra zona.');return;}first.click();setTimeout(function(){var go=document.querySelector('#shBody [data-act="nav"]');if(go){say('Vamos al taller más cercano. Iniciando ruta.');go.click();}else say('Encontré talleres, pero abre la ficha del primero para iniciar la ruta.');},650);} ,6500);}return;}say('Te escuché, pero no reconocí el comando. Prueba: busca talleres cerca de mí, talleres en Coyoacán o abre mi ruta.');}
+$d('domiVoice').addEventListener('click',function(){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){say('Este navegador no permite reconocimiento de voz.');alert('El reconocimiento de voz depende del navegador. En iPhone, prueba Safari actualizado y permite el micrófono; si no aparece, usa búsqueda por texto.');return;}if(listening&&recognition){recognition.stop();return;}recognition=new SR();recognition.lang='es-MX';recognition.interimResults=false;recognition.maxAlternatives=1;recognition.onstart=function(){listening=true;$d('domiVoice').textContent='🔴 Te escucho…';say('Te escucho.');};recognition.onresult=function(e){command(e.results[0][0].transcript);};recognition.onerror=function(e){console.warn(e.error);};recognition.onend=function(){listening=false;$d('domiVoice').textContent='🎙️ Hablar con DOMI';};try{recognition.start();}catch(e){listening=false;}});
+})();
+</script>
+</body>
+</html>

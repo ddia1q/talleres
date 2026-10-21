@@ -1,0 +1,7 @@
+{
+  "nota": "Plantilla de referencia. Crea las cuentas en Supabase Authentication > Users y asigna roles en la tabla domi_profiles usando el SQL de LEEME_SUPABASE.txt. No pongas contraseñas aquí.",
+  "usuarios": [
+    { "email": "tu-correo@empresa.com", "role": "ADMIN", "display_name": "Administración" },
+    { "email": "chofer1@empresa.com", "role": "CHOFER", "display_name": "Chofer 1" }
+  ]
+}

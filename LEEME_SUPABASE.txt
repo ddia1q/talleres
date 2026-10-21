@@ -1,0 +1,63 @@
+DOMI PARA TINY HOST — HTML + JAVASCRIPT + SUPABASE GRATIS
+========================================================
+
+IMPORTANTE
+- Esta versión sigue siendo un sitio estático. No requiere Python, Flask ni servidor propio.
+- Tiiny Host sirve la interfaz. Supabase guarda las cuentas, rutas y visitas.
+- El plan gratuito de Supabase basta para comenzar dentro de sus límites de uso; no hace falta activar un plan de pago para seguir estos pasos. Los límites/condiciones del proveedor pueden cambiar.
+- La clave que se pone en supabase-config.js debe ser la clave pública anon/publishable. NUNCA uses service_role/secret key en el navegador.
+
+1) CREAR EL PROYECTO GRATIS
+- Entra a https://supabase.com y crea una cuenta/proyecto con el plan Free.
+- En Project Settings > API (o Connect), copia Project URL y la clave anon/public.
+- Abre supabase-config.js y sustituye:
+    https://TU_URL_DE_PROYECTO.supabase.co
+    TU_ANON_KEY_PUBLICA
+  por los valores de TU proyecto.
+- No pongas contraseñas ni claves secretas en este archivo.
+
+2) CREAR LAS TABLAS Y REGLAS DE SEGURIDAD
+- En Supabase, abre SQL Editor > New query.
+- Abre supabase_schema.sql, copia TODO el contenido, pégalo en SQL Editor y pulsa Run.
+- Esto crea perfiles, rutas y visitas, además de políticas RLS para que cada chofer solo acceda a sus datos y ADMIN pueda ver el historial global.
+
+3) CREAR LA PRIMERA CUENTA ADMIN
+- En Supabase > Authentication > Users > Add user, crea tu cuenta con tu correo y una contraseña segura.
+- Confirma/verifica el usuario desde el panel si Supabase lo requiere.
+- En SQL Editor ejecuta (sustituye el correo por el correo exacto de tu cuenta):
+
+  update public.domi_profiles
+  set role = 'ADMIN', display_name = 'Administración'
+  where lower(email) = lower('tu-correo@empresa.com');
+
+- Si la consulta actualiza 0 filas, revisa que la cuenta aparezca en Authentication > Users y vuelve a ejecutar.
+
+4) DAR DE ALTA A LOS CHOFERES
+- Crea cada cuenta en Authentication > Users > Add user, con correo y contraseña inicial.
+- De forma predeterminada el trigger asigna CHOFER.
+- Si necesitas cambiar nombre, puedes ejecutar:
+
+  update public.domi_profiles
+  set display_name = 'Nombre del chofer', role = 'CHOFER'
+  where lower(email) = lower('chofer@empresa.com');
+
+- Edita usuarios_iniciales.sql con los correos/nombres de las personas y ejecuta ese archivo en SQL Editor para asignar ADMIN/CHOFER. usuarios_iniciales.example.json es solo una plantilla de referencia. No pongas contraseñas en ningún archivo. Las cuentas reales primero se crean en Supabase Authentication.
+- Por seguridad, crear usuarios nuevos desde el panel ADMIN de la página requeriría una función backend privilegiada; no se debe fingir que eso es seguro desde HTML. Para esta versión gratuita, el alta se hace en Supabase Dashboard.
+
+5) SUBIR A TINY HOST
+- Sube el contenido de esta carpeta, no la carpeta exterior ni el ZIP dentro de la web.
+- Deben quedar en la raíz del sitio: index.html, supabase-config.js, sw.js, manifest.webmanifest, iconos y carpeta data/.
+- Conserva toda la carpeta data/ con sus JSON originales.
+- La página requiere HTTPS para autenticación segura, ubicación y permisos de micrófono. Tiiny debe servirla mediante HTTPS.
+- Si el iPhone muestra una versión vieja, cierra la PWA, abre la web en Safari y recarga. El service worker se actualizó a domi-supabase-v1 para renovar caché.
+
+6) USO
+- Inicia sesión con el correo y contraseña creados en Supabase.
+- Abre la ficha de un taller y pulsa “Agregar a mi ruta de hoy”.
+- En “Mi ruta” puedes abrir navegación, registrar visitas y quitar paradas.
+- El registro incluye contacto, persona que atendió, interés y notas.
+- El panel ADMIN muestra el historial global. La base de datos aplica los permisos aunque alguien intente saltarse la interfaz.
+- Botón “Hablar con DOMI”: los comandos de voz dependen de la compatibilidad del navegador y permiso de micrófono. En iPhone no se garantiza activación permanente por “Oye, DOMI”; se usa el botón para empezar a escuchar.
+
+NOTA DE SEGURIDAD
+La clave anon/public está diseñada para aparecer en aplicaciones de navegador, siempre que RLS esté activado y las políticas estén bien configuradas. No compartas service_role/secret key. No subas contraseñas a archivos JSON ni a Tiiny Host.
